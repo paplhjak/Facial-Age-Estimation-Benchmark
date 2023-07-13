@@ -57,7 +57,7 @@ To address this issue, we provide a unified training and evaluation setup, enabl
 
 Our aim is to foster collective efforts within the community to advance the state-of-the-art in age estimation and uncover which approaches are truly worth pursuing. By providing a common evaluation framework, we hope to encourage collaboration, facilitate knowledge sharing, and accelerate progress in this field.
 
-We have compiled a comprehensive table showcasing the results of the benchmarked age estimation methods. We encourage anyone to contribute their own results to our benchmarking table. By sharing your findings, we can create a more diverse and comprehensive resource for the community. Simply submit your results as a pull request, including relevant details, and we will incorporate them into the table.
+We have compiled a comprehensive table showcasing the MAE results of the benchmarked age estimation methods. We encourage anyone to contribute their own results to our benchmarking table. By sharing your findings, we can create a more diverse and comprehensive resource for the community. Simply submit your results as a pull request, including relevant details, and we will incorporate them into the table.
 
 If you lack the necessary computational resources to evaluate your age estimation method, we are here to help. You can implement your method into our framework, and we will evaluate its performance using our standardized evaluation setup.
 
