@@ -30,7 +30,7 @@ Comparing different age estimation methods poses a challenge due to the unreliab
 <center>
 <img src="doc/MAE_vs_year.png" alt="Graph" height="300">  
 </center>
-
+    
 We argue that, for age estimation tasks outside of the low-data regime, designing specialized methods is unnecessary, and the standard approach of utilizing cross-entropy loss is sufficient. 
 
 <!-- GETTING STARTED -->
