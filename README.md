@@ -25,6 +25,14 @@
 
 This repository serves as the official PyTorch codebase for the paper titled "Unraveling the Age Estimation Puzzle: Comparative Analysis of Deep Learning Approaches for Facial Age Estimation". You can find the paper on [arXiv](https://arxiv.org/abs/2307.04570) here. 
 
+Comparing different age estimation methods poses a challenge due to the unreliability of published results, stemming from inconsistencies in the benchmarking process. Previous studies have reported continuous performance improvements over the past decade using specialized methods; however, our findings challenge these claims.
+
+<center>
+<img src="doc/MAE_vs_year.png" alt="Graph" height="300">  
+</center>
+    
+We argue that, for age estimation tasks outside of the low-data regime, designing specialized methods is unnecessary, and the standard approach of utilizing cross-entropy loss is sufficient. 
+
 <!-- GETTING STARTED -->
 ## Getting Started
 
