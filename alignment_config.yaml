@@ -1,0 +1,14 @@
+data:
+    img_dir: "test/datasets/"
+
+bbox:
+    crop_size: [140, 140]
+    margin: [0.25, 0.25]
+
+output_bbox:
+    eye_to_eye_scale_multipler: 1.92
+    eye_to_mouth_scale_multipler: 1.89
+
+detector:
+    det_size: [160, 160]
+    det_thresh: 0.5

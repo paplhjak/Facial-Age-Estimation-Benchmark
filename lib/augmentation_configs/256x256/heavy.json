@@ -1,0 +1,230 @@
+{
+    "__version__": "v1.0",
+    "transform": {
+        "__class_fullname__": "albumentations.core.composition.Compose",
+        "p": 1.0,
+        "transforms": [
+            {
+                "__class_fullname__": "albumentations.augmentations.crops.transforms.RandomResizedCrop",
+                "always_apply": true,
+                "p": 1.0,
+                "height": 256,
+                "width": 256,
+                "scale": [
+                    0.6,
+                    1.0
+                ],
+                "ratio": [
+                    0.85,
+                    1.1765
+                ]
+            },
+            {
+                "__class_fullname__": "albumentations.augmentations.transforms.HorizontalFlip",
+                "always_apply": false,
+                "p": 0.5
+            },
+            {
+                "__class_fullname__": "albumentations.augmentations.transforms.Downscale",
+                "always_apply": false,
+                "p": 0.5,
+                "scale_min": 0.2, 
+                "scale_max": 0.99,
+                "interpolation": {
+                    "downscale": 0, 
+                    "upscale": 1
+                }
+            },
+            {
+                "__class_fullname__": "albumentations.core.composition.OneOf",
+                "p": 0.2,
+                "transforms": [
+                    {
+                        "__class_fullname__": "albumentations.augmentations.geometric.transforms.ShiftScaleRotate",
+                        "always_apply": false,
+                        "p": 0.6,
+                        "shift_limit": 0.05, 
+                        "scale_limit": 0.1, 
+                        "rotate_limit": 10
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.geometric.transforms.Affine",
+                        "always_apply": false,
+                        "p": 0.2,
+                        "scale": [0.9, 1.1], 
+                        "translate_percent": 0.05,
+                        "rotate": [-10, 10],
+                        "shear": [-10, 10]
+        
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.geometric.transforms.Perspective",
+                        "always_apply": false,
+                        "p": 0.2,
+                        "scale": [0.025, 0.1]
+                    }
+                ]
+            },
+            {
+                "__class_fullname__": "albumentations.augmentations.transforms.FancyPCA",
+                "always_apply": false,
+                "p": 0.2,
+                "alpha": 0.2
+            },
+            {
+                "__class_fullname__": "albumentations.augmentations.transforms.RandomGamma",
+                "always_apply": false,
+                "p": 0.2,
+                "gamma_limit": [80, 120]
+            },
+            {
+                "__class_fullname__": "albumentations.core.composition.OneOf",
+                "p": 0.5,
+                "transforms": [
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.ColorJitter",
+                        "always_apply": false,
+                        "p": 0.3,
+                        "brightness": 0.5, 
+                        "contrast": 0.5,
+                        "saturation": 0.5,
+                        "hue": 0.05
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.RandomToneCurve",
+                        "always_apply": false,
+                        "p": 0.2,
+                        "scale": 0.1
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.Equalize",
+                        "always_apply": false,
+                        "p": 0.05,
+                        "by_channels": false
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.Equalize",
+                        "always_apply": false,
+                        "p": 0.05,
+                        "by_channels": true
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.RGBShift",
+                        "always_apply": false,
+                        "p": 0.4,
+                        "r_shift_limit": 15,
+                        "g_shift_limit": 15,
+                        "b_shift_limit": 15
+                    }
+                ]
+            },
+            {
+                "__class_fullname__": "albumentations.core.composition.OneOf",
+                "p": 0.2,
+                "transforms": [
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.CLAHE",
+                        "always_apply": false,
+                        "p": 0.15,
+                        "clip_limit": [1, 4], 
+                        "tile_grid_size": [8, 8]
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.Emboss",
+                        "always_apply": false,
+                        "p": 0.15,
+                        "alpha": [0.1, 0.6], 
+                        "strength": [0.2, 0.9]
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.MultiplicativeNoise",
+                        "always_apply": false,
+                        "p": 0.4,
+                        "multiplier": [0.7, 1.3]
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.Sharpen",
+                        "always_apply": false,
+                        "p": 0.3,
+                        "alpha": [0.1, 0.5],
+                        "lightness": [0.5, 1.0]
+                    }
+                ]
+            },
+            {
+                "__class_fullname__": "albumentations.core.composition.OneOf",
+                "p": 0.5,
+                "transforms": [
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.ImageCompression",
+                        "always_apply": false,
+                        "p": 0.4,
+                        "quality_lower": 15,
+                        "quality_upper": 70
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.ISONoise",
+                        "always_apply": false,
+                        "p": 0.4,
+                        "color_shift": [0.01, 0.05],
+                        "intensity": [0.1, 0.5]
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.transforms.Posterize",
+                        "always_apply": false,
+                        "p": 0.2,
+                        "num_bits": [5,7]
+                    }  
+                ]
+            },
+            {
+                "__class_fullname__": "albumentations.core.composition.OneOf",
+                "p": 0.5,
+                "transforms": [
+                    {
+                        "__class_fullname__": "albumentations.augmentations.geometric.transforms.CoarseDropout",
+                        "always_apply": false,
+                        "p": 0.5,
+                        "max_holes": 32, 
+                        "max_height": 24, 
+                        "max_width": 24, 
+                        "min_holes": 1, 
+                        "min_height": 1, 
+                        "min_width": 1
+                    },
+                    {
+                        "__class_fullname__": "albumentations.augmentations.geometric.transforms.PixelDropout",
+                        "always_apply": false,
+                        "p": 0.5,
+                        "dropout_prob": 0.05
+                    }
+                ]
+            },
+            {
+                "__class_fullname__": "albumentations.augmentations.transforms.Normalize",
+                "always_apply": true,
+                "p": 1.0,
+                "mean": [
+                    0.485, 
+                    0.456, 
+                    0.406
+                ],
+                "std": [
+                    0.229, 
+                    0.224, 
+                    0.225
+                ],
+                "max_pixel_value": 255
+            },
+            {
+                "__class_fullname__": "albumentations.pytorch.transforms.ToTensorV2",
+                "always_apply": true,
+                "p": 1.0,
+                "transpose_mask": true
+            }
+        ],
+        "bbox_params": null,
+        "keypoint_params": null,
+        "additional_targets": {}
+    }
+}
