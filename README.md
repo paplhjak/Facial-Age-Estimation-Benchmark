@@ -4,7 +4,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/paplhjak/Facial-Age-Estimation-Benchmark">
-    <img src="doc/logo.png" alt="Logo" width="300" height="300">
+    <img src="doc/logo.png" alt="Logo" width="" height="200">
   </a>
 
 <h1 align="center">Facial Age Estimation Benchmark</h1>
