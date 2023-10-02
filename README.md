@@ -76,6 +76,7 @@ Thank you for your interest and participation in our project.
 |   2019   |              [Soft labels for ordinal regression](https://openaccess.thecvf.com/content_CVPR_2019/papers/Diaz_Soft_Labels_for_Ordinal_Regression_CVPR_2019_paper.pdf)               |   5.81    |   3.14   |     3.96     |     4.27     |   2.81    |    4.36     |
 |   2021   |                                 [Age estimation using expectation of label distribution learning](https://www.ijcai.org/proceedings/2018/0099.pdf)                                  |   5.80    |   3.15   |     3.96     |     4.23     |   2.82    |    4.42     |
 |   2022   |                          [Unimodal-concentrated loss: Fully adaptive label distribution learning for ordinal regression](https://arxiv.org/abs/2204.00309)                          |   5.90    |   3.20   |     4.10     |     4.17     |   2.78    |    4.47     |
+|   2023   |                          [A Call to Reflect on Evaluation Practices for Age Estimation: Comparative Analysis of the State-of-the-Art and a Unified Benchmark](https://arxiv.org/abs/2307.04570)                          |   5.64    |   3.12   |     3.96     |     3.38     |   3.04    |    3.87     |
 
 <!-- CONTRIBUTING -->
 
