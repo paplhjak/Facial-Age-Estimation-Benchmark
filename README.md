@@ -17,7 +17,7 @@
 
 <div>
   <p align="center">
-  arXiv: <a href="https://arxiv.org/abs/2307.04570">Unraveling the Age Estimation Puzzle: Comparative Analysis of Deep Learning Approaches for Facial Age Estimation</a>
+  arXiv: <a href="https://arxiv.org/abs/2307.04570">A Call to Reflect on Evaluation Practices for Age Estimation: Comparative Analysis of the State-of-the-Art and a Unified Benchmark</a>
   </p>
 </div>
 
@@ -25,7 +25,7 @@
 
 ## About The Project
 
-This repository serves as the official PyTorch codebase for the paper titled "Unraveling the Age Estimation Puzzle: Comparative Analysis of Deep Learning Approaches for Facial Age Estimation". You can find the paper on [arXiv](https://arxiv.org/abs/2307.04570) here.
+This repository serves as the official PyTorch codebase for the CVPR 2024 paper titled "A Call to Reflect on Evaluation Practices for Age Estimation: Comparative Analysis of the State-of-the-Art and a Unified Benchmark". You can find the paper on [arXiv](https://arxiv.org/abs/2307.04570) here.
 
 Comparing different age estimation methods poses a challenge due to the unreliability of published results, stemming from inconsistencies in the benchmarking process. Previous studies have reported continuous performance improvements over the past decade using specialized methods; however, our findings challenge these claims.
 
