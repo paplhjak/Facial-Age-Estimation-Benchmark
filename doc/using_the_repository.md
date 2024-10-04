@@ -31,6 +31,8 @@ $CONDA_PREFIX/bin/pip install torch torchvision torchaudio
 
 Once you have installed the packages and activated the `age_conda_env` environment, you can run the project by executing the relevant scripts.
 
+In case you decide to reproduce the results, you may find the resnet50 model pretrained on IMDB-Clean at the following [link](https://paplham.cloud/index.php/s/TmtPyz4ABkYkL7E).
+
 # Pipeline
 
 In this document, we describe the pipeline of obtaining and preprocessing the data, defining the experiment configuration file and training the models.
