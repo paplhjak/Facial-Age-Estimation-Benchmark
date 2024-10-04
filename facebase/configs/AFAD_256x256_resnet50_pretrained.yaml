@@ -1,6 +1,6 @@
 data:
-  benchmark: "facebase/benchmarks/AgeDB.yaml"
-  img_dir: "/mnt/personal/paplhjak/faces_raw_data/"
+  benchmark: "facebase/benchmarks/AFAD.yaml"
+  img_dir: "/local/xfrancv/Faces/"
   output_dir: "facebase/results/"
   data_dir: "facebase/data/"
 
@@ -20,16 +20,18 @@ heads:
         target_class_prior: [0.1, 0.2, 0.3]
 
 model:
-  architecture: "resnet50"
-  use_pretrained: True
+  architecture: "jit"
+  path: "resnet50-imdb-em-cnn.pt"
+  nr_features: 2048
+  backbone_trainable: True
   input_size: [256, 256]
 
 optimizer:
   num_workers: 0
-  num_epochs: 100
+  num_epochs: 50
   batch_size: 100
-  improve_patience: 100
-  lr: 0.001
+  improve_patience: 50
+  lr: 0.0001
   betas: [0.9, 0.999]
   eps: 0.00000001
   algo: "adam"

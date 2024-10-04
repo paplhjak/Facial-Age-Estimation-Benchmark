@@ -1,6 +1,6 @@
 data:
   benchmark: "facebase/benchmarks/CLAP2016.yaml"
-  img_dir: "/local/xfrancv/Faces/"
+  img_dir: "/mnt/personal/paplhjak/faces_raw_data/"
   output_dir: "facebase/results/"
   data_dir: "facebase/data/"
 

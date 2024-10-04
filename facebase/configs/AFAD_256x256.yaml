@@ -1,6 +1,6 @@
 data:
   benchmark: "facebase/benchmarks/AFAD.yaml"
-  img_dir: "/local/xfrancv/Faces/"
+  img_dir: "/mnt/data/mlg/Faces/"
   output_dir: "facebase/results/"
   data_dir: "facebase/data/"
 

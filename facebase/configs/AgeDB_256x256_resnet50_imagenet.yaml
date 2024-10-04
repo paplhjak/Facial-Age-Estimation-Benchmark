@@ -1,6 +1,6 @@
 data:
   benchmark: "facebase/benchmarks/AgeDB.yaml"
-  img_dir: "/mnt/personal/paplhjak/faces_raw_data/"
+  img_dir: "/local/xfrancv/Faces/"
   output_dir: "facebase/results/"
   data_dir: "facebase/data/"
 
@@ -26,10 +26,10 @@ model:
 
 optimizer:
   num_workers: 0
-  num_epochs: 100
+  num_epochs: 50
   batch_size: 100
-  improve_patience: 100
-  lr: 0.001
+  improve_patience: 50
+  lr: 0.0001
   betas: [0.9, 0.999]
   eps: 0.00000001
   algo: "adam"

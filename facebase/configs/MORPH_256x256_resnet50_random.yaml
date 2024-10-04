@@ -1,6 +1,6 @@
 data:
-  benchmark: "facebase/benchmarks/AgeDB.yaml"
-  img_dir: "/mnt/personal/paplhjak/faces_raw_data/"
+  benchmark: "facebase/benchmarks/MORPH.yaml"
+  img_dir: "/local/xfrancv/Faces/"
   output_dir: "facebase/results/"
   data_dir: "facebase/data/"
 
@@ -21,7 +21,7 @@ heads:
 
 model:
   architecture: "resnet50"
-  use_pretrained: True
+  use_pretrained: False
   input_size: [256, 256]
 
 optimizer:
