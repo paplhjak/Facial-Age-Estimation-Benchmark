@@ -1,0 +1,44 @@
+data:
+  benchmark: "facebase/benchmarks/AFAD.yaml"
+  img_dir: "/local/xfrancv/Faces/"
+  output_dir: "facebase/results/"
+  data_dir: "facebase/data/"
+
+heads:
+  - tag: "age"
+    type: "soft_labels"
+    attribute: "age"
+    labels: !include labels0-101.yaml
+    weight: 1
+    metric: ["mae", "cs5"]
+    visual_metric:
+      - tag: "mae"
+      - tag: "bias"
+      - tag: "prc"
+        target_class:
+          [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+        target_class_name: "child 0-17"
+        target_class_prior: [0.1, 0.2, 0.3]
+
+model:
+  architecture: "jit"
+  path: "resnet50-imdb-em-cnn.pt"
+  nr_features: 2048
+  backbone_trainable: True
+  input_size: [256, 256]
+
+optimizer:
+  num_workers: 0
+  num_epochs: 50
+  batch_size: 100
+  improve_patience: 50
+  lr: 0.0001
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+  algo: "adam"
+
+preprocess:
+  bbox_extension: [0, 0]
+  input_extension: [0.05, 0.05]
+  trn: { path: "lib/augmentation_configs/256x256/jitter+hflip.json" }
+  val: { path: "lib/augmentation_configs/256x256/center_crop.json" }
