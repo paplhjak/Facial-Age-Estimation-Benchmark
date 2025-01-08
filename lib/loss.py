@@ -56,15 +56,15 @@ def mean_variance_loss(logits: torch.tensor, labels: torch.tensor, lambda_1=0.2,
     return loss
 
 
-def unimodal_concentrated_loss(logits: torch.tensor, labels: torch.tensor):
-    """
-    For the paper, we obtained the official implementation from the authors of Unimodal-Concentrated Loss. However, we were asked not to make it public. Therefore, the loss function has been removed from the release version of the code.
-    """
-    raise NotImplementedError(
-        "For the paper, we obtained the official implementation from the authors of Unimodal-Concentrated Loss. However, we were asked not to make it public. Therefore, the loss function has been removed from the release version of the code.")
+# def unimodal_concentrated_loss(logits: torch.tensor, labels: torch.tensor):
+#     """
+#     For the paper, we obtained the official implementation from the authors of Unimodal-Concentrated Loss. However, we were asked not to make it public. Therefore, the loss function has been removed from the release version of the code.
+#     """
+#     raise NotImplementedError(
+#         "For the paper, we obtained the official implementation from the authors of Unimodal-Concentrated Loss. However, we were asked not to make it public. Therefore, the loss function has been removed from the release version of the code.")
 
 
-def unimodal_concentrated_loss_not_official(logits: torch.tensor, labels: torch.tensor, lambda_=1000):
+def unimodal_concentrated_loss(logits: torch.tensor, labels: torch.tensor, lambda_=1000):
     """
     Computes the Unimodal-Concentrated Loss as defined in Unimodal-Concentrated Loss: Fully Adaptive Label Distribution Learning for Ordinal Regression.
 

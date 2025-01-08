@@ -1,6 +1,6 @@
 data:
   benchmark: "facebase/benchmarks/AFAD.yaml"
-  img_dir: "/local/xfrancv/Faces/"
+  img_dir: "/home/vision/alireza-sm/datasets/"
   output_dir: "facebase/results/"
   data_dir: "facebase/data/"
 
@@ -26,7 +26,7 @@ model:
   input_size: [256, 256]
 
 optimizer:
-  num_workers: 0
+  num_workers: 8
   num_epochs: 50
   batch_size: 100
   improve_patience: 50

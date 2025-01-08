@@ -9,8 +9,8 @@ import os
 import pandas as pd
 
 # Define root to the dataset, the path to the output file and the number of desired folders
-root = '/local/Faces'
-AFAD_path = 'AFAD/AFAD-Full'
+root = '/home/vision/alireza-sm/datasets'
+AFAD_path = 'AFAD-Full'
 AFAD_root = os.path.join(root, AFAD_path)
 output_file = '../benchmarks/databases/AFAD-Full.json'
 nr_folders = 10

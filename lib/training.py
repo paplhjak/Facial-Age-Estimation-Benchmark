@@ -19,6 +19,7 @@ import sys
 import numpy as np
 import wandb
 from typing import Dict
+from tqdm import tqdm
 
 
 def eval_model(model: nn.Module,
@@ -151,11 +152,11 @@ def train_model(model: nn.Module,
         config['optimizer']['use_amp'])
 
     # visualize validation and training images
-    dry_training(config, dataloaders, output_dir)
+    # dry_training(config, dataloaders, output_dir)
 
     num_epochs = config['optimizer']['num_epochs']
     improve_patience = config['optimizer']['improve_patience']
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
     # get head names and weights (when multiple heads are trained, the loss is their combination) from config
     head_names = []
@@ -188,8 +189,8 @@ def train_model(model: nn.Module,
         min_val_error = checkpoint['min_val_error']
 
         # resend logs to wandb
-        for log in log_history:
-            wandb.log(log)
+        # for log in log_history:
+        #     wandb.log(log)
     else:
         # start from scratch
         start_epoch = 0
@@ -207,7 +208,7 @@ def train_model(model: nn.Module,
             break
 
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
-        print('-' * 10)
+        print('-' * 40)
 
         # Each epoch has a training and validation phase
         log = {}
@@ -224,14 +225,18 @@ def train_model(model: nn.Module,
             with torch.set_grad_enabled(phase == 'trn'):
 
                 n_examples = 0
-                for inputs, labels, _, _ in dataloaders[phase]:
+                # yoyo = time.time()
+                for inputs, labels, _, _ in tqdm(dataloaders[phase], bar_format='{desc:<5.5}{percentage:3.0f}%|{bar:10}{r_bar}'):
+                    # print('\nloop start', time.time() - yoyo)
                     inputs = inputs.to(device)
 
                     with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=use_amp):
+                        # print('before model', time.time() - yoyo)
                         heads = model(inputs)
 
                         batch_size = inputs.size(0)
                         loss_fce = 0.0
+                        # print('before loop', time.time() - yoyo)
                         for head, head_logits in heads.items():
 
                             head_labels = labels[head].to(device)
@@ -257,12 +262,17 @@ def train_model(model: nn.Module,
 
                         n_examples += batch_size
 
+                        # print('after loop', time.time() - yoyo)
                     # backward + optimize only if in training phase
+                    # print('before loss', time.time() - yoyo)
                     if phase == 'trn':
                         optimizer.zero_grad()
                         scaler.scale(loss_fce).backward()
+                        # print('after loss', time.time() - yoyo)
                         scaler.step(optimizer)
+                        # print('after step', time.time() - yoyo)
                         scaler.update()
+                        # print('after update', time.time() - yoyo)
 
             # compute weighted error and weighted loss
             weighted_error = 0.0
@@ -302,7 +312,7 @@ def train_model(model: nn.Module,
         log['elapsed_minutes'] = (time.time() - since)/60
 
         # update wandb
-        wandb.log(log)
+        # wandb.log(log)
 
         # append log
         log_history.append(log)

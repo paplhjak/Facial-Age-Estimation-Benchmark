@@ -50,27 +50,28 @@ if __name__ == '__main__':
     print(config)
     
     # Log outputs to a directory specified by git tag if available
-    try:
-        import git
-        repo = git.Repo(search_parent_directories=True)
-        tagmap = {}
-        for t in repo.tags:
-            tagmap[str(t.commit)] = str(t.name)
+    # try:
+    #     import git
+    #     repo = git.Repo(search_parent_directories=True)
+    #     tagmap = {}
+    #     for t in repo.tags:
+    #         tagmap[str(t.commit)] = str(t.name)
             
-        current_commit = str(repo.head.object.hexsha)
+    #     current_commit = str(repo.head.object.hexsha)
 
-        print(f"Commit {current_commit}")
-        if current_commit in tagmap.keys():
-            git_versioning = f"/{tagmap[current_commit]}"
-            print(f"Found a tag {git_versioning}")
-        else:
-            print(f"No tag found for commit {current_commit}")
-            git_versioning = ''
+    #     print(f"Commit {current_commit}")
+    #     if current_commit in tagmap.keys():
+    #         git_versioning = f"/{tagmap[current_commit]}"
+    #         print(f"Found a tag {git_versioning}")
+    #     else:
+    #         print(f"No tag found for commit {current_commit}")
+    #         git_versioning = ''
 
-    except:
-        git_versioning = ''
+    # except:
+    #     git_versioning = ''
+    git_versioning = ''
         
-    print(f"Git versioning subdir: {git_versioning}")
+    # print(f"Git versioning subdir: {git_versioning}")
     
     # Input/output folders and files
     config_name = os.path.basename( args.config ).split('.')[0]
@@ -87,22 +88,22 @@ if __name__ == '__main__':
     with open(os.path.join(output_dir, "version.log"), "a") as handle:
         handle.write("\n"+"-"*50)
         handle.write(f"\nStarting the experiment at {datetime.now()}")
-        try:
-            import git
-            handle.write("\n"+str(git.Git().log(-1)))
-        except:
-            print("Could not run `git log`. Are you in a git repository and have gitpython installed?")
-            handle.write(f"\nFailed to run git log. Run `pip install gitpython`.")    
+        # try:
+        #     import git
+        #     handle.write("\n"+str(git.Git().log(-1)))
+        # except:
+        #     print("Could not run `git log`. Are you in a git repository and have gitpython installed?")
+        #     handle.write(f"\nFailed to run git log. Run `pip install gitpython`.")    
 
     # Init WANDB
-    mode = "online" 
-    if args.wandb_disabled:
-        mode = "disabled"
-    if args.wandb_offline:
-        model = "offline"
+    # mode = "online" 
+    # if args.wandb_disabled:
+    #     mode = "disabled"
+    # if args.wandb_offline:
+    #     model = "offline"
     
-    wandb_name = config_name + f"({args.split}) " + datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
-    wandb.init( config=dict( yaml= args.config ), name = wandb_name, mode=mode )
+    # wandb_name = config_name + f"({args.split}) " + datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+    # wandb.init( config=dict( yaml= args.config ), name = wandb_name, mode=mode )
 
     # Detect if we have a GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -127,26 +128,29 @@ if __name__ == '__main__':
         'trn': get_data_transform( "trn", config ),
         'val': get_data_transform( "val", config )
     }
-
     # Create training and validation datasets
     image_datasets = {
-        'trn': NormalizedImages( protocol_file, label_tags, folders=[0], transform = data_transforms['trn']  ),
-        'val': NormalizedImages( protocol_file, label_tags, folders=[1], transform = data_transforms['val']  )
+        'trn': NormalizedImages( protocol_file, label_tags, folders=[0], transform = data_transforms['trn'], load_to_memory=False  ),
+        'val': NormalizedImages( protocol_file, label_tags, folders=[1], transform = data_transforms['val'], load_to_memory=False  )
     }
 
     # Create training and validation dataloaders
     batch_size = config["optimizer"]["batch_size"]
     num_workers = config["optimizer"]["num_workers"]
     dataloaders = {
-        x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size, shuffle=True, num_workers=num_workers)
+        x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
         for x in ['trn', 'val'] } 
 
     # Gather and print the parameters to be optimized
     params_to_update = model.parameters()
     print("Params to learn:")
+    learnable_params_num = 0
     for name, param in model.named_parameters():
         if param.requires_grad == True:
-            print("\t", name)
+            learnable_params_num += param.numel()
+            print("\t", name, param.numel())
+    else:
+        print(f"Number of Learnable Parameters: {learnable_params_num}", end='\n')
 
     # Setup optimizer
     if config["optimizer"]["algo"] == "sgd":
@@ -168,7 +172,7 @@ if __name__ == '__main__':
     # Evaluate model on all data
     data_transform = get_data_transform( "val", config )
     image_dataset = NormalizedImages( protocol_file, label_tags, folders=[0,1,2], transform = data_transform, load_to_memory=False  )
-    dataloader = torch.utils.data.DataLoader( image_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    dataloader = torch.utils.data.DataLoader( image_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
     posterior, predicted_label, true_label, id, folder, error = eval_model( model, config, loss_matrix, dataloader, device )
 
@@ -210,5 +214,3 @@ if __name__ == '__main__':
         cpu_model = model.cpu()        
         cpu_model_scripted = torch.jit.script(cpu_model) # Export to TorchScript
         torch.jit.save(cpu_model_scripted, model_fname + "_cpu.pt", _extra_files={'config': yaml.dump(config)} )
-
- 
