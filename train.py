@@ -4,6 +4,7 @@ import yaml
 import sys
 import torch
 import random
+import logging
 import numpy as np
 import torch.optim as optim
 from lib.training import *
@@ -11,7 +12,7 @@ from lib.utils import *
 from lib.model import initialize_model
 from lib.data_loaders import MyYamlLoader, NormalizedImages, get_data_transform
 import argparse
-import wandb
+# import wandb
 from datetime import datetime
 
 # fix random seeds for reproducibility
@@ -29,6 +30,23 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 print("PyTorch Version: ", torch.__version__)
 print("Torchvision Version: ", torchvision.__version__)
+
+def setup_logging(output_dir):
+    log_file = os.path.join(output_dir, "training.log")
+    
+    # Configure logging to write only to the log file
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler(log_file, mode="a")  # Log only to the file
+        ]
+    )
+    
+    # Ensure logs are not propagated to the root logger
+    logging.getLogger().propagate = False
+    
+    return log_file
 
 if __name__ == '__main__':
 
@@ -83,7 +101,8 @@ if __name__ == '__main__':
     
     # Output folder
     create_dir(output_dir)
-    
+    setup_logging(output_dir)
+    logging.info(config)
     # Log experiment start time and if possible, current commit
     with open(os.path.join(output_dir, "version.log"), "a") as handle:
         handle.write("\n"+"-"*50)
@@ -108,6 +127,7 @@ if __name__ == '__main__':
     # Detect if we have a GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"running on: {device}")
+    logging.info(f"running on: {device}")
 
     # Create loss matrix for each task
     # The loss is used as the objective to be minimized during the model selection.
@@ -144,13 +164,16 @@ if __name__ == '__main__':
     # Gather and print the parameters to be optimized
     params_to_update = model.parameters()
     print("Params to learn:")
+    logging.info("Params to learn:")
     learnable_params_num = 0
     for name, param in model.named_parameters():
         if param.requires_grad == True:
             learnable_params_num += param.numel()
             print("\t", name, param.numel())
+            logging.info(f"\t {name}, {param.numel()}")
     else:
         print(f"Number of Learnable Parameters: {learnable_params_num}", end='\n')
+        logging.info(f"Number of Learnable Parameters: {learnable_params_num}\n")
 
     # Setup optimizer
     if config["optimizer"]["algo"] == "sgd":
@@ -160,9 +183,18 @@ if __name__ == '__main__':
                     betas=config["optimizer"]["betas"],eps=config["optimizer"]["eps"])
     else:
         sys.exit(f"Unknown optimizer {config['optimizer']['algo']}")
+    
+    print(model)
+    logging.info(model)
+    # Print number of data instances
+    for key, value in dataloaders.items():
+        print(f"Number of {key} data" , len(value.dataset))
+        logging.info(f"Number of {key} data {len(value.dataset)}")
+
 
     # Train and evaluate
     if args.dry is False:
+
         model, log_history = train_model( model, config, dataloaders, loss_matrix, optimizer, device, output_dir )
     else:
         # generate and store input images
@@ -178,10 +210,13 @@ if __name__ == '__main__':
 
     # Print errors
     print("Model evalution:")
+    logging.info("Model evalution:")
     for i, set in enumerate( error.keys() ):
-        print(f"[{set} set]" )
+        print(f"[{set} set]")
+        logging.info(f"[{set} set]")
         for head in config['heads']:
             print(f"{head['tag']} ({head['metric'][0]}): {error[set][head['tag']]:.4f}")
+            logging.info(f"{head['tag']} ({head['metric'][0]}): {error[set][head['tag']]:.4f}")
 
 
     # Save model

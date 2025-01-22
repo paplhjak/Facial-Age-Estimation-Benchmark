@@ -56,12 +56,12 @@ def mean_variance_loss(logits: torch.tensor, labels: torch.tensor, lambda_1=0.2,
     return loss
 
 
-# def unimodal_concentrated_loss(logits: torch.tensor, labels: torch.tensor):
-#     """
-#     For the paper, we obtained the official implementation from the authors of Unimodal-Concentrated Loss. However, we were asked not to make it public. Therefore, the loss function has been removed from the release version of the code.
-#     """
-#     raise NotImplementedError(
-#         "For the paper, we obtained the official implementation from the authors of Unimodal-Concentrated Loss. However, we were asked not to make it public. Therefore, the loss function has been removed from the release version of the code.")
+def unimodal_concentrated_loss(logits: torch.tensor, labels: torch.tensor):
+    """
+    For the paper, we obtained the official implementation from the authors of Unimodal-Concentrated Loss. However, we were asked not to make it public. Therefore, the loss function has been removed from the release version of the code.
+    """
+    raise NotImplementedError(
+        "For the paper, we obtained the official implementation from the authors of Unimodal-Concentrated Loss. However, we were asked not to make it public. Therefore, the loss function has been removed from the release version of the code.")
 
 
 def unimodal_concentrated_loss(logits: torch.tensor, labels: torch.tensor, lambda_=1000):
@@ -78,7 +78,27 @@ def unimodal_concentrated_loss(logits: torch.tensor, labels: torch.tensor, lambd
     nr_classes = logits.shape[1]
     eps = 1e-10
 
+    # Check for NaN or inf in logits
+    if torch.isnan(logits).any():
+        print("Invalid logits detected!")
+        print("Logits:", logits)
+        raise ValueError("Logits contain NaN.")
+    
+    if torch.isinf(logits).any():
+        print("Invalid logits detected!")
+        print("Logits:", logits)
+        raise ValueError("Logits contain inf values.")
+
+    # Compute probas
     probas = F.softmax(logits, dim=1)
+
+    # Check for NaN or inf in probas
+    if torch.isnan(probas).any() or torch.isinf(probas).any():
+        print("Invalid probas detected!")
+        print("Probas:", probas)
+        print("Logits:", logits)
+        raise ValueError("Probas contain NaN or inf values.")
+
     diffs = torch.diff(probas, dim=1).to(labels.device)
 
     class_labels = torch.arange(0, nr_classes)
@@ -102,15 +122,52 @@ def unimodal_concentrated_loss(logits: torch.tensor, labels: torch.tensor, lambd
         torch.sum(signed_and_clipped_diffs, dim=1)).to(labels.device)
 
     means = torch.sum(probas*class_labels, dim=1).to(labels.device)
+
+    # Check for NaN in means
+    if torch.isnan(means).any():
+        print("NaN detected in means!")
+        print("Means:", means)
+        print("Probas:", probas)
+        print("Class labels:", class_labels)
+
     broadcast_means = torch.broadcast_to(
         means[:, None], probas.shape).to(labels.device)
     variances = torch.sum(((broadcast_means - class_labels)**2)
                           * probas, dim=1).to(labels.device)
 
-    assert torch.all(variances >= 0)
+    # Check for NaN in variances
+    if torch.isnan(variances).any():
+        print("NaN detected in variances!")
+        print("Variances:", variances)
+        print("Broadcast means:", broadcast_means)
+        print("Class labels:", class_labels)
+        print("Probas:", probas)
+
+    # Add a small epsilon to ensure variances are non-negative
+    variances = variances + eps
+
+    # Check for negative variances and print them if they exist
+    if not torch.all(variances >= 0):
+        print("Negative variances detected!")
+        print("Variances:", variances)
+        print("Indices of negative variances:", torch.where(variances < 0))
+        print("Means:", means)
+        print("Probas:", probas)
+        print("Class labels:", class_labels)
+        print("Broadcast means:", broadcast_means)
+
+    assert torch.all(variances >= 0), "Variances should be non-negative!"
 
     concentrated_loss = torch.mean(
         torch.log(variances + eps) / 2. + ((means-labels)**2)/(2.*variances + eps))
+
+    # Check for NaN in concentrated_loss
+    if torch.isnan(concentrated_loss).any():
+        print("NaN detected in concentrated_loss!")
+        print("Concentrated loss:", concentrated_loss)
+        print("Variances:", variances)
+        print("Means:", means)
+        print("Labels:", labels)
 
     loss = concentrated_loss + lambda_ * unimodal_loss
     return loss
@@ -185,6 +242,51 @@ def dldl_v2_loss(logits: torch.tensor, labels: torch.tensor, sigma: float = 2, l
     loss = F.cross_entropy(logits, label_distributions) + \
         lambda_ * torch.mean(torch.abs(means-labels))
     return loss
+
+
+# def dldl_v2_loss(logits: torch.Tensor, labels: torch.Tensor, sigma: float = 2, lambda_: float = 1):
+#     """
+#     Computes the loss as defined in Learning Expectation of Label Distribution for Facial Age and Attractiveness Estimation.
+
+#     Args:
+#         logits (torch.Tensor): Size([batch_size, nr_classes])
+#         labels (torch.Tensor): Size([batch_size])
+#         sigma (float, optional): Standard deviation of the Gaussian GT label distribution. Defaults to 2.
+#         lambda_ (float, optional): Weight of L1 loss. Defaults to 1.
+
+#     Returns:
+#         torch.Tensor: The computed loss.
+#     """
+#     batch_size = logits.shape[0]
+#     nr_classes = logits.shape[1]
+
+#     # Convert logits to probabilities using softmax
+#     probas = F.softmax(logits, dim=1)
+
+#     # Generate class labels (0, 1, ..., nr_classes-1)
+#     class_labels = torch.arange(0, nr_classes, device=labels.device)
+#     class_labels = class_labels.unsqueeze(0).expand(batch_size, -1)  # Broadcast to batch size
+
+#     # Broadcast ground-truth labels to match the shape of class_labels
+#     broadcast_labels = labels.unsqueeze(1).expand(-1, nr_classes)
+
+#     # Generate the ground-truth label distribution using a Gaussian distribution
+#     label_distributions = torch.exp(-((class_labels - broadcast_labels) ** 2) / (2 * sigma ** 2))
+#     label_distributions = label_distributions / label_distributions.sum(dim=1, keepdim=True)  # Normalize
+
+#     # Calculate the KL divergence between the predicted and ground-truth distributions
+#     kl_div = F.kl_div(torch.log(probas + 1e-10), label_distributions, reduction='batchmean')
+
+#     # Calculate the expected age (mean of the predicted distribution)
+#     expected_age = torch.sum(probas * class_labels, dim=1)
+
+#     # Calculate the L1 loss between the expected age and the ground-truth age
+#     l1_loss = F.l1_loss(expected_age, labels)
+
+#     # Combine the KL divergence and L1 loss
+#     loss = kl_div + lambda_ * l1_loss
+
+#     return loss
 
 
 def soft_labels_loss(logits: torch.tensor, labels: torch.tensor, distance_squared=False):

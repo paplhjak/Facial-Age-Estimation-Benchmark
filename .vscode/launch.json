@@ -1,0 +1,21 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Python Debugger: Facial Age Benchmark",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "/home/vision/alireza-sm/Facial-Age-Estimation-Benchmark/facebase/configs/other/Adience_256x256_resnet50_imagenet_dldl_v2.yaml",
+                "0",
+                "--wandb-disabled"
+            ]
+        }
+    ]
+}

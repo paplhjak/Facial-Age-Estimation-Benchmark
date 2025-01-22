@@ -230,8 +230,26 @@ class Model(nn.Module):
         Args:
             x (torch.tensor): Network input, typically a mini batch of images of the shape [Batch, Channels, Height, Width].
         """
+        # Check for NaN in logits
+        if torch.isnan(x).any():
+            print("NaN detected in input!")
+            print("Input:", x)
+            raise ValueError("Inputs contain NaN values.")
+        
         x = self.features(x)
+
+        if torch.isnan(x).any():
+            print("NaN detected in features!")
+            print("Input:", x)
+            raise ValueError("Features contain NaN values.")
+        
         heads = self.logits(x)
+        
+        if torch.isnan(x).any():
+            print("NaN detected in head!")
+            print("Input:", heads)
+            raise ValueError("Head contain NaN values.")
+        
         return heads
 
     @torch.jit.export

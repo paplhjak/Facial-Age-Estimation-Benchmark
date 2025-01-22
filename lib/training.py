@@ -12,12 +12,13 @@ import torch
 import torch.nn as nn
 import torchvision
 import matplotlib.pyplot as plt
+import logging
 import time
 import os
 import copy
 import sys
 import numpy as np
-import wandb
+# import wandb
 from typing import Dict
 from tqdm import tqdm
 
@@ -152,11 +153,11 @@ def train_model(model: nn.Module,
         config['optimizer']['use_amp'])
 
     # visualize validation and training images
-    # dry_training(config, dataloaders, output_dir)
+    dry_training(config, dataloaders, output_dir)
 
     num_epochs = config['optimizer']['num_epochs']
     improve_patience = config['optimizer']['improve_patience']
-    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
     # get head names and weights (when multiple heads are trained, the loss is their combination) from config
     head_names = []
@@ -183,6 +184,8 @@ def train_model(model: nn.Module,
             scaler.load_state_dict(checkpoint["scaler_state_dict"])
         else:
             print(f"Could not find state dictionary for GradScaler.")
+            logging.info(f"Could not find state dictionary for GradScaler.")
+            
         best_model_wts = copy.deepcopy(checkpoint['best_model_wts'])
         best_model_epoch = checkpoint['best_model_epoch']
         log_history = checkpoint['log_history']
@@ -205,10 +208,13 @@ def train_model(model: nn.Module,
         # stop if there is no improvement for more than improve_patience epochs
         if epoch - best_model_epoch > improve_patience:
             print(f"No improvement after {improve_patience} epochs -> halt.")
+            logging.info(f"No improvement after {improve_patience} epochs -> halt.")
             break
 
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
+        logging.info('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 40)
+        logging.info('-' * 40)
 
         # Each epoch has a training and validation phase
         log = {}
@@ -228,6 +234,8 @@ def train_model(model: nn.Module,
                 # yoyo = time.time()
                 for inputs, labels, _, _ in tqdm(dataloaders[phase], bar_format='{desc:<5.5}{percentage:3.0f}%|{bar:10}{r_bar}'):
                     # print('\nloop start', time.time() - yoyo)
+                    # print(f"[ALIREZA] {inputs.size()}")
+                    # print(f"[ALIREZA] {labels['age']} {labels['age'].size()}")
                     inputs = inputs.to(device)
 
                     with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=use_amp):
@@ -305,8 +313,14 @@ def train_model(model: nn.Module,
                 loss_msg += f" {head}_loss:{running_loss[head]:.4f}"
                 error_msg += f" {head}_error:{running_error[head]:.4f}"
             print(f"[{phase} phase]")
+            logging.info(f"[{phase} phase]")
             print(error_msg)
+            logging.info(error_msg)
             print(loss_msg)
+            logging.info(loss_msg)
+            if phase == 'val':
+                print(f"Best Epoch: {best_model_epoch}")
+                logging.info(f"Best Epoch: {best_model_epoch}")
 
         # log elapsed time
         log['elapsed_minutes'] = (time.time() - since)/60
@@ -334,13 +348,17 @@ def train_model(model: nn.Module,
         checkpoint_file = output_dir + f"checkpoint_{epoch}.pth"
         torch.save(checkpoint, checkpoint_file)
         print(f"Checkpoint saved to {checkpoint_file}")
+        logging.info(f"Checkpoint saved to {checkpoint_file}")
 
         print()
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
+    logging.info('Training complete in {:.0f}m {:.0f}s'.format(
+        time_elapsed // 60, time_elapsed % 60))
     print('Best epoch: {:4f}'.format(best_model_epoch))
+    logging.info('Best epoch: {:4f}'.format(best_model_epoch))
 
     # load best model weights
     model.load_state_dict(best_model_wts)

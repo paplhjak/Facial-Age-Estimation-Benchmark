@@ -1,5 +1,5 @@
 data:
-  benchmark: "facebase/benchmarks/AFAD.yaml"
+  benchmark: "facebase/benchmarks/Adience.yaml"
   img_dir: "/media/vision/FastStorage-1/alireza-sm/datasets/"
   output_dir: "facebase/results/"
   data_dir: "facebase/data/"
@@ -8,7 +8,7 @@ heads:
   - tag: "age"
     type: "mean_variance"
     attribute: "age"
-    labels: !include labels0-101.yaml
+    labels: !include labels0-7.yaml
     weight: 1
     metric: ["mae", "cs5"]
     visual_metric:
@@ -28,7 +28,7 @@ model:
 optimizer:
   num_workers: 8
   num_epochs: 50
-  batch_size: 100
+  batch_size: 2
   improve_patience: 50
   lr: 0.0001
   betas: [0.9, 0.999]
@@ -40,4 +40,4 @@ preprocess:
   bbox_extension: [0, 0]
   input_extension: [0.05, 0.05]
   trn: { path: "lib/augmentation_configs/256x256/jitter+hflip.json" }
-  val: { path: "lib/augmentation_configs/256x256/center_crop.json" }
+  val: { path: "lib/augmentation_configs/256x256/resize_normalize.json" }

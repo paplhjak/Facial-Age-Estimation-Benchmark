@@ -1,0 +1,18 @@
+- database: "databases/Adience.json"
+  tag: "Adience"
+  split: 
+  - trn: [0,1,2]
+    val: [3]
+    tst: [4]
+  - trn: [4,0,1]
+    val: [2]
+    tst: [3]
+  - trn: [3,4,0]
+    val: [1]
+    tst: [2]
+  - trn: [2,3,4]
+    val: [0]
+    tst: [1]
+  - trn: [1,2,3]
+    val: [4]
+    tst: [0]

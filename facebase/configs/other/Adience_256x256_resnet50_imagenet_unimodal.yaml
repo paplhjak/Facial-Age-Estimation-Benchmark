@@ -1,14 +1,14 @@
 data:
-  benchmark: "facebase/benchmarks/AFAD.yaml"
+  benchmark: "facebase/benchmarks/Adience.yaml"
   img_dir: "/media/vision/FastStorage-1/alireza-sm/datasets/"
   output_dir: "facebase/results/"
   data_dir: "facebase/data/"
 
 heads:
   - tag: "age"
-    type: "mean_variance"
+    type: "unimodal_concentrated"
     attribute: "age"
-    labels: !include labels0-101.yaml
+    labels: !include labels0-7.yaml
     weight: 1
     metric: ["mae", "cs5"]
     visual_metric:

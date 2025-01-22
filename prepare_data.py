@@ -27,7 +27,6 @@ def get_labels(face, tasks):
 
     return labels
 
-
 def get_tasks(config):
     tasks = config['heads']
     for task in tasks:
@@ -38,7 +37,6 @@ def get_tasks(config):
             for i in range(len(label)):
                 task['normalized_label'].append(c)
     return tasks
-
 
 def normalize_img(img, bbox, input_size, input_extension, bbox_extension, return_affine_transform=False):
 
@@ -121,26 +119,26 @@ if __name__ == '__main__':
         for item_id, face in tqdm(enumerate(db), total=len(db)):
             labels = get_labels(face, tasks)
             img_file = config['data']['img_dir'] + face['img_path']
-            bbox_exists = ("aligned_bbox" in face.keys() and len(face['aligned_bbox']) > 0) or ("bbox" in face.keys())
-            if bbox_exists and labels is not None and face['folder'] in folders and os.path.exists(img_file):
+            # bbox_exists = ("aligned_bbox" in face.keys() and len(face['aligned_bbox']) > 0) or ("bbox" in face.keys())
+            if labels is not None and face['folder'] in folders and os.path.exists(img_file):
                 count += 1
                 local_count += 1
 
                 # load face image
                 in_img = cv2.imread(img_file)
 
-                if 'aligned_bbox' in face and len(face['aligned_bbox']) > 0:
-                    bbox = face['aligned_bbox']
-                else:
-                    bbox = face['bbox']
+                # if 'aligned_bbox' in face and len(face['aligned_bbox']) > 0:
+                #     bbox = face['aligned_bbox']
+                # else:
+                #     bbox = face['bbox']
 
-                # normalize image
-                out_img = normalize_img(
-                    in_img, bbox, input_size, input_extension, bbox_extension)
+                # # normalize image
+                # out_img = normalize_img(
+                #     in_img, bbox, input_size, input_extension, bbox_extension)
 
                 # save it to config['data_dir']/images/img_count.png
                 out_img_path = out_img_dir + f"img{count:07d}.png"
-                cv2.imwrite(out_img_path, out_img)
+                cv2.imwrite(out_img_path, in_img)
 
                 # put it to face_list
                 face_list.append([count, out_img_path, db_id,
@@ -150,7 +148,7 @@ if __name__ == '__main__':
                 print('file exists:', os.path.exists(img_file))
                 print('full annotation:', labels is not None)
                 print('in folder:', face['folder'] in folders)
-                print('bbox exists:', bbox_exists)
+                # print('bbox exists:', bbox_exists)
                 print(face)
 
         print(f"Accepted {local_count+1} faces out of {len(db)}")
