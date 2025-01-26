@@ -16,7 +16,7 @@ def apply_noise_to_dataset(csv_path, npy_path, seed=None):
     noise_matrix = np.load(npy_path)
     
     # شناسایی داده‌های آموزشی (train) که ستون سوم آن‌ها برابر با 0 است
-    train_data = df[df[2] == 0]
+    train_data = df[df[2] < 2]
     
     # شناسایی کلاس‌های متمایز
     unique_classes = train_data[3].unique()

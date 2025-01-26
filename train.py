@@ -66,6 +66,11 @@ if __name__ == '__main__':
     with open( args.config,'r') as stream:
         config = yaml.load(stream, Loader=MyYamlLoader )
     print(config)
+
+    # Check training mode
+    training_mode = config['training']['mode']
+    if training_mode not in ['normal', 'noisy']:
+        raise ValueError(f"Invalid training mode: {training_mode}. Use 'normal' or 'noisy'.")
     
     # Log outputs to a directory specified by git tag if available
     # try:

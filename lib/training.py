@@ -202,6 +202,15 @@ def train_model(model: nn.Module,
         best_model_epoch = 0
         log_history = []
 
+    # Initialize parameter store if in noisy mode
+    if config['training']['mode'] == 'noisy':
+        from lib.parameter_store import InstanceParameterStore
+        param_store = InstanceParameterStore(base_sigma=config['training']['base_sigma'])
+        train_face_ids = dataloaders['trn'].dataset.id
+        param_store.initialize(train_face_ids, dataloaders['trn'].dataset.labels['age'])
+    else:
+        param_store = None
+    
     # Main optimization loop
     for epoch in range(start_epoch, num_epochs):
 
@@ -232,11 +241,18 @@ def train_model(model: nn.Module,
 
                 n_examples = 0
                 # yoyo = time.time()
-                for inputs, labels, _, _ in tqdm(dataloaders[phase], bar_format='{desc:<5.5}{percentage:3.0f}%|{bar:10}{r_bar}'):
-                    # print('\nloop start', time.time() - yoyo)
-                    # print(f"[ALIREZA] {inputs.size()}")
-                    # print(f"[ALIREZA] {labels['age']} {labels['age'].size()}")
+                for inputs, labels, ids, folders in tqdm(dataloaders[phase], bar_format='{desc:<5.5}{percentage:3.0f}%|{bar:10}{r_bar}'):
                     inputs = inputs.to(device)
+                    
+                    # Retrieve σ and μ for noisy training
+                    if param_store is not None and phase == 'trn':
+                        sigmas, means = param_store.get_params(ids.cpu().numpy())
+                    else:
+                        sigmas = torch.ones_like(labels['age']) * config['training']['base_sigma']
+                        means = labels['age']
+                    
+                    sigmas = sigmas.to(device)
+                    means = means.to(device)
 
                     with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=use_amp):
                         # print('before model', time.time() - yoyo)
@@ -251,7 +267,7 @@ def train_model(model: nn.Module,
 
                             # evaluate loss function
                             head_loss = model.get_head_loss(
-                                head_logits, head_labels, head)
+                                head_logits, head_labels, head, sigmas, means)
                             loss_fce += weights[head] * head_loss
 
                             # compute error metric
@@ -274,6 +290,14 @@ def train_model(model: nn.Module,
                     # backward + optimize only if in training phase
                     # print('before loss', time.time() - yoyo)
                     if phase == 'trn':
+                        # Update σ and μ for noisy training
+                        if param_store is not None:
+                            with torch.no_grad():
+                                error = torch.abs(predicted_labels - means)
+                                new_sigmas = sigmas + config['training']['alpha'] * (error - sigmas)
+                                new_means = config['training']['beta'] * means + (1 - config['training']['beta']) * predicted_labels
+                                param_store.update(ids.cpu().numpy(), new_sigmas.cpu().numpy(), new_means.cpu().numpy())
+
                         optimizer.zero_grad()
                         scaler.scale(loss_fce).backward()
                         # print('after loss', time.time() - yoyo)
@@ -349,7 +373,11 @@ def train_model(model: nn.Module,
         torch.save(checkpoint, checkpoint_file)
         print(f"Checkpoint saved to {checkpoint_file}")
         logging.info(f"Checkpoint saved to {checkpoint_file}")
-
+        
+        if param_store:
+            param_store.save_mean_history(output_dir + "mean_history.json")
+            param_store.save_sigma_history(output_dir + "sigma_history.json")
+        
         print()
 
     time_elapsed = time.time() - since
@@ -359,6 +387,7 @@ def train_model(model: nn.Module,
         time_elapsed // 60, time_elapsed % 60))
     print('Best epoch: {:4f}'.format(best_model_epoch))
     logging.info('Best epoch: {:4f}'.format(best_model_epoch))
+    
 
     # load best model weights
     model.load_state_dict(best_model_wts)
