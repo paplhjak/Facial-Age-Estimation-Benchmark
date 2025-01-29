@@ -10,6 +10,64 @@ from typing import List, Tuple, Callable, Dict
 from tqdm import tqdm
 import pickle
 import pandas as pd
+import argparse
+import random
+import copy
+
+
+def apply_noise_to_list(data_list, npy_path, seed=4):
+    """
+    Applies label noise to a list-based dataset using a noise transition matrix.
+    
+    Parameters:
+        data_list (list): The dataset in list format. Each element is a list with at least six elements,
+                          where the last element (index 5) is a dictionary containing {'age': label}.
+        npy_path (str): Path to the NumPy file containing the noise transition matrix.
+        seed (int, optional): Seed for reproducibility.
+    
+    Returns:
+        list: The modified dataset with noisy labels.
+    """
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+
+    # Load noise transition matrix
+    noise_matrix = np.load(npy_path)
+    
+    # Identify all unique classes present in the dataset
+    unique_classes = set(item[5] for item in data_list)
+    
+    # Create a copy of the dataset to modify
+    noisy_data = copy.deepcopy(data_list)
+    
+    # Apply noise to each class
+    for class_label in unique_classes:
+        # Extract samples belonging to the current class
+        class_samples = [item for item in noisy_data if item[5] == class_label]
+        num_class_samples = len(class_samples)
+
+        # Get the corresponding row from the noise matrix
+        noise_row = noise_matrix[class_label]
+
+        # Calculate the number of samples to convert to each class
+        noisy_samples_count = (noise_row * num_class_samples).astype(int)
+
+        # Keep track of already modified samples
+        already_selected = set()
+
+        # Apply noise based on the transition matrix
+        for target_class, count in enumerate(noisy_samples_count):
+            for _ in range(count):
+                while True:
+                    random_sample = random.choice(class_samples)
+                    if id(random_sample) not in already_selected:
+                        already_selected.add(id(random_sample))
+                        break
+                # Modify only the 'age' value inside labels
+                random_sample[5] = target_class
+
+    return noisy_data
 
 
 def get_labels(face, tasks):
@@ -56,11 +114,13 @@ def normalize_img(img, bbox, input_size, input_extension, bbox_extension, return
 
 if __name__ == '__main__':
 
-    if len(sys.argv) != 2:
-        sys.exit(f"usage: {sys.argv[0]} path/config.yaml")
+    parser = argparse.ArgumentParser(description='Process some images.')
+    parser.add_argument('config_file', type=str, help='Path to the config.yaml file')
+    parser.add_argument('--inject_noise', type=str, required=False, help='Path to the noise transition matrix file')
+    args = parser.parse_args()
 
     # load config
-    config_file = sys.argv[1]
+    config_file = args.config_file
     with open(config_file, 'r') as stream:
         config = yaml.load(stream, Loader=MyYamlLoader)
 
@@ -154,6 +214,12 @@ if __name__ == '__main__':
         print(f"Accepted {local_count+1} faces out of {len(db)}")
 
     print(f"Total number of accepted faces {count+1}")
+    
+    if args.inject_noise:
+        noisy_face_list = apply_noise_to_list(face_list, args.inject_noise)
+        print(f"noisy_face_list created!")
+    else:
+        noisy_face_list = None
 
     # save face_list to face_list.csv
     face_list_file = config['data']['data_dir'] + \
@@ -182,14 +248,20 @@ if __name__ == '__main__':
     # create data_splitX.csv files
     for split_idx, split in enumerate(benchmark['split']):
 
-        data_split_file = config['data']['data_dir'] + \
-            f'{config_name}/data_split{split_idx}.csv'
-        f = open(data_split_file, "w+")
-        for face in face_list:
-            db_id = face[2]
-            fol = folder[db_id][split_idx][face[4]]
-            f.write(f"{face[0]},{face[1]},{fol}")
-            for item in face[5:]:
-                f.write(f",{item}")
-            f.write("\n")
-        f.close()
+        data_split_file = config['data']['data_dir'] + f'{config_name}/data_split{split_idx}.csv'
+        
+        with open(data_split_file, "w+") as f:
+            for idx, face in enumerate(face_list):
+                db_id = face[2]
+                fol = folder[db_id][split_idx][face[4]]
+
+                if noisy_face_list and fol in [0, 1]:
+                    selected_face = noisy_face_list[idx]
+                    print('Im here')
+                else:
+                    selected_face = face
+
+                f.write(f"{selected_face[0]},{selected_face[1]},{fol}")
+                for item in selected_face[5:]:
+                    f.write(f",{item}")
+                f.write("\n")
