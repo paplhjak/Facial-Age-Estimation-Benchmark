@@ -206,8 +206,9 @@ def train_model(model: nn.Module,
     if config['training']['mode'] == 'noisy':
         from lib.parameter_store import InstanceParameterStore
         param_store = InstanceParameterStore(base_sigma=config['training']['base_sigma'])
-        train_face_ids = dataloaders['trn'].dataset.id
-        param_store.initialize(train_face_ids, dataloaders['trn'].dataset.labels['age'])
+        train_face_ids = dataloaders['trn'].dataset.id + dataloaders['val'].dataset.id
+        param_store.initialize(train_face_ids,
+                               dataloaders['trn'].dataset.labels['age'] + dataloaders['val'].dataset.labels['age'])
     else:
         param_store = None
     
@@ -245,7 +246,7 @@ def train_model(model: nn.Module,
                     inputs = inputs.to(device)
                     
                     # Retrieve σ and μ for noisy training
-                    if param_store is not None and phase == 'trn':
+                    if param_store is not None:
                         sigmas, means = param_store.get_params(ids.cpu().numpy())
                     else:
                         sigmas = torch.ones_like(labels['age']) * config['training']['base_sigma']
@@ -289,15 +290,15 @@ def train_model(model: nn.Module,
                         # print('after loop', time.time() - yoyo)
                     # backward + optimize only if in training phase
                     # print('before loss', time.time() - yoyo)
+                                            # Update σ and μ for noisy training
+                    if param_store is not None:
+                        with torch.no_grad():
+                            error = torch.abs(predicted_labels - means)
+                            new_sigmas = sigmas + config['training']['alpha'] * (error - sigmas)
+                            new_means = config['training']['beta'] * means + (1 - config['training']['beta']) * predicted_labels
+                            param_store.update(ids.cpu().numpy(), new_sigmas.cpu().numpy(), new_means.cpu().numpy())
+                    
                     if phase == 'trn':
-                        # Update σ and μ for noisy training
-                        if param_store is not None:
-                            with torch.no_grad():
-                                error = torch.abs(predicted_labels - means)
-                                new_sigmas = sigmas + config['training']['alpha'] * (error - sigmas)
-                                new_means = config['training']['beta'] * means + (1 - config['training']['beta']) * predicted_labels
-                                param_store.update(ids.cpu().numpy(), new_sigmas.cpu().numpy(), new_means.cpu().numpy())
-
                         optimizer.zero_grad()
                         scaler.scale(loss_fce).backward()
                         # print('after loss', time.time() - yoyo)
