@@ -20,6 +20,7 @@ import torch.utils.data as data
 from typing import Any, IO, List, Callable
 from PIL import Image
 import albumentations
+import pandas as pd
 
 
 def get_data_transform(trn_val_test_set: str,
@@ -217,7 +218,8 @@ class NormalizedImages(data.Dataset):
             transform (Callable): Transformation applied on PIL Images, see :py:meth:`get_data_transform`. Defaults to None.
             load_to_memory (bool, optional): If True, pre-loads images to memory. Defaults to True.
         """
-        data = self.load_csv(csv_file, folders)
+        self.csv_file = csv_file
+        data = self.load_csv(self.csv_file, folders)
 
         self.transform = transform
         self.num_labels = len(label_tags)
@@ -226,6 +228,8 @@ class NormalizedImages(data.Dataset):
         self.id = []
         self.images = []
         self.folder = []
+        self.means = []
+        self.sigmas = []
         self.num_records = len(data)
         self.load_to_memory = load_to_memory
 
@@ -242,6 +246,9 @@ class NormalizedImages(data.Dataset):
             self.folder.append(folder)
             for i, tag in enumerate(self.label_tags):
                 self.labels[tag].append(record[3+i])
+            self.means.append(record[-2])
+            self.sigmas.append(record[-1])
+            
 
     def __getitem__(self, index: int):
         """
@@ -266,8 +273,10 @@ class NormalizedImages(data.Dataset):
         folder = self.folder[index]
         if self.transform is not None:
             img = self.transform(img)
+        mean = self.means[index]
+        sigma = self.sigmas[index]
 
-        return img, labels, id, folder
+        return img, labels, id, folder, mean, sigma
 
     def __len__(self):
         """
@@ -291,8 +300,36 @@ class NormalizedImages(data.Dataset):
             for line in rf.readlines():
                 record = line.split(',')
                 record = [int(record[0]), record[1].strip('"')] + \
-                    [int(record[i]) for i in range(2, len(record))]
+                    [int(record[i]) for i in range(2, len(record) - 2)] + \
+                    [float(record[i]) for i in range(len(record) - 2, len(record))]
                 folder = record[2]
                 if folder in folders:
                     data.append(record)
         return data
+
+    def update_parameters(self, ids, new_means, new_sigmas):
+        """
+        Updates means and sigmas for given IDs by finding their indices in self.id.
+        """
+        for i, new_mean, new_sigma in zip(ids, new_means, new_sigmas):
+            if i in self.id:
+                index = self.id.index(i)  # Find the index of 'i' in self.id
+                self.means[index] = new_mean
+                self.sigmas[index] = new_sigma
+            else:
+                raise ValueError("i is not in self.id")
+
+    def update_csv_file(self):
+        df = pd.read_csv(self.csv_file, header=None)
+        df.iloc[:, -2] = df.iloc[:, -2].astype('float64')
+        
+        # Create a mapping dictionary from IDs to (means, sigmas)
+        update_dict = dict(zip(self.id, zip(self.means, self.sigmas)))
+
+        # Find rows where ID matches and update the last two columns
+        for idx, row_id in enumerate(df[0]):  # Iterate over IDs in DataFrame
+            if row_id in update_dict:
+                df.iloc[idx, -2] = update_dict[row_id][0]  # Update means
+                df.iloc[idx, -1] = update_dict[row_id][1]  # Update sigmas
+
+        df.to_csv(self.csv_file, index=False, header=False)

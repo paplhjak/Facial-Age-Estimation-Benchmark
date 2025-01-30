@@ -177,8 +177,6 @@ if __name__ == '__main__':
 
         print("cropping images...")
         for item_id, face in tqdm(enumerate(db), total=len(db)):
-            if item_id > 600:
-                break
             labels = get_labels(face, tasks)
             img_file = config['data']['img_dir'] + face['img_path']
             # bbox_exists = ("aligned_bbox" in face.keys() and len(face['aligned_bbox']) > 0) or ("bbox" in face.keys())
@@ -259,15 +257,13 @@ if __name__ == '__main__':
 
                 if noisy_face_list and fol in [0, 1]:
                     selected_face = noisy_face_list[idx]
-                    print('Im here')
                 else:
                     selected_face = face
 
                 f.write(f"{selected_face[0]},{selected_face[1]},{fol}")
                 for item in selected_face[5:]:
                     f.write(f",{item}")
-                if config['training']['mode'] == 'noisy':
-                    for item in selected_face[5:]:
-                        f.write(f",{item}")
-                    f.write(f",{config['training']['base_sigma']}")
+                for item in selected_face[5:]:
+                    f.write(f",{item}")
+                f.write(f",{config['training']['base_sigma']}")
                 f.write("\n")
