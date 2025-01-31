@@ -4,6 +4,18 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+        {
+            "name": "Python Debugger: Prepare Age Data",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "/media/vision/FastStorage-1/alireza-sm/Facial-Age-Estimation-Benchmark/facebase/configs/other/Adience_256x256_resnet50_imagenet_noisy_dldl_v2.yaml",
+                "--inject_noise",
+                "noise_matrix_8_0.4_3.npy"
+            ]
+        },
 
         {
             "name": "Python Debugger: Facial Age Benchmark",
@@ -12,7 +24,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
-                "/home/vision/alireza-sm/Facial-Age-Estimation-Benchmark/facebase/configs/other/Adience_256x256_resnet50_imagenet_dldl_v2.yaml",
+                "/media/vision/FastStorage-1/alireza-sm/Facial-Age-Estimation-Benchmark/facebase/configs/other/Adience_256x256_resnet50_imagenet_noisy_dldl_v2.yaml",
                 "0",
                 "--wandb-disabled"
             ]

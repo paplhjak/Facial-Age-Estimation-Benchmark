@@ -1,9 +1,5 @@
+import yaml
 import subprocess
-
-##################################
-######## Train Models ############
-##################################
-# Define the base command template
 
 base_command = "python train.py {config_path} {split} --wandb-disabled"
 
