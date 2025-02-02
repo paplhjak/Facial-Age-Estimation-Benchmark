@@ -167,6 +167,7 @@ if __name__ == '__main__':
         for x in ['trn', 'val'] } 
 
     # Gather and print the parameters to be optimized
+    # if config['training']['mode'] == 'normal':
     params_to_update = model.parameters()
     print("Params to learn:")
     logging.info("Params to learn:")
@@ -189,6 +190,7 @@ if __name__ == '__main__':
     else:
         sys.exit(f"Unknown optimizer {config['optimizer']['algo']}")
     
+    # if config['training']['mode'] == 'normal':
     print(model)
     logging.info(model)
     # Print number of data instances

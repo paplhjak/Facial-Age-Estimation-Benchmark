@@ -175,7 +175,7 @@ def train_model(model: nn.Module,
 
     num_epochs = config['optimizer']['num_epochs']
     improve_patience = config['optimizer']['improve_patience']
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    scaler = torch.amp.GradScaler(enabled=use_amp)
 
     # get head names and weights (when multiple heads are trained, the loss is their combination) from config
     head_names = []
@@ -307,7 +307,7 @@ def train_model(model: nn.Module,
                     # backward + optimize only if in training phase
                     # print('before loss', time.time() - yoyo)
                                             # Update σ and μ for noisy training
-                    if config['training']['mode'] == 'noisy':
+                    if config['training']['mode'] == 'noisy' and phase == 'trn':
                         with torch.no_grad():
                             error = torch.abs(predicted_labels - means)
                             new_sigmas = sigmas + config['training']['alpha'] * (error - sigmas)
