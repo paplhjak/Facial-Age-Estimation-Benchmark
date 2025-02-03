@@ -175,7 +175,7 @@ def train_model(model: nn.Module,
 
     num_epochs = config['optimizer']['num_epochs']
     improve_patience = config['optimizer']['improve_patience']
-    scaler = torch.amp.GradScaler(enabled=use_amp)
+    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
     # get head names and weights (when multiple heads are trained, the loss is their combination) from config
     head_names = []
@@ -307,12 +307,26 @@ def train_model(model: nn.Module,
                     # backward + optimize only if in training phase
                     # print('before loss', time.time() - yoyo)
                                             # Update σ and μ for noisy training
-                    if config['training']['mode'] == 'noisy' and phase == 'trn':
+                    # Evaluate best model to get predicted labels before updating means and sigmas
+                    if config['training']['mode'] == 'noisy':
+                        best_model = copy.deepcopy(model)
+                        best_model.load_state_dict(best_model_wts)
+                        best_model.eval()
+
                         with torch.no_grad():
-                            error = torch.abs(predicted_labels - means)
+                            best_heads = best_model(inputs)
+                            best_head_posterior = best_model.get_head_posterior(
+                                best_heads[head], head)
+                            _, best_predicted_labels = torch.min(
+                                torch.matmul(best_head_posterior, loss_matrix[head]), 1)
+
+                        with torch.no_grad():
+                            error = torch.abs(best_predicted_labels - means)
                             new_sigmas = sigmas + config['training']['alpha'] * (error - sigmas)
-                            new_means = config['training']['beta'] * means + (1 - config['training']['beta']) * predicted_labels
-                            dataloaders[phase].dataset.update_parameters(ids.cpu().numpy(), new_means.cpu().numpy(), new_sigmas.cpu().numpy())
+                            new_means = config['training']['beta'] * means + (1 - config['training']['beta']) * best_predicted_labels
+
+                            dataloaders[phase].dataset.update_parameters(
+                                ids.cpu().numpy(), new_means.cpu().numpy(), new_sigmas.cpu().numpy())
                             mean_history = update_history(mean_history, ids.cpu().numpy(), new_means.cpu().numpy())
                             sigma_history = update_history(sigma_history, ids.cpu().numpy(), new_sigmas.cpu().numpy())
                     
