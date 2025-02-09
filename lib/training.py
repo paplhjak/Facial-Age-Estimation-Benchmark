@@ -308,27 +308,32 @@ def train_model(model: nn.Module,
                     # print('before loss', time.time() - yoyo)
                                             # Update σ and μ for noisy training
                     # Evaluate best model to get predicted labels before updating means and sigmas
-                    if config['training']['mode'] == 'noisy':
-                        best_model = copy.deepcopy(model)
-                        best_model.load_state_dict(best_model_wts)
-                        best_model.eval()
+                    # if config['training']['mode'] == 'noisy' and phase == 'val' and epoch > 9:
+                    #     best_model = copy.deepcopy(model)
+                    #     best_model.load_state_dict(best_model_wts)
+                    #     best_model.eval()
 
-                        with torch.no_grad():
-                            best_heads = best_model(inputs)
-                            best_head_posterior = best_model.get_head_posterior(
-                                best_heads[head], head)
-                            _, best_predicted_labels = torch.min(
-                                torch.matmul(best_head_posterior, loss_matrix[head]), 1)
+                    #     with torch.no_grad():
+                    #         best_heads = best_model(inputs)
+                    #         best_head_posterior = best_model.get_head_posterior(
+                    #             best_heads[head], head)
+                    #         _, best_predicted_labels = torch.min(
+                    #             torch.matmul(best_head_posterior, loss_matrix[head]), 1)
 
-                        with torch.no_grad():
-                            error = torch.abs(best_predicted_labels - means)
-                            new_sigmas = sigmas + config['training']['alpha'] * (error - sigmas)
-                            new_means = config['training']['beta'] * means + (1 - config['training']['beta']) * best_predicted_labels
+                    #     with torch.no_grad():
+                    #         error = torch.abs(best_predicted_labels - means)
 
-                            dataloaders[phase].dataset.update_parameters(
-                                ids.cpu().numpy(), new_means.cpu().numpy(), new_sigmas.cpu().numpy())
-                            mean_history = update_history(mean_history, ids.cpu().numpy(), new_means.cpu().numpy())
-                            sigma_history = update_history(sigma_history, ids.cpu().numpy(), new_sigmas.cpu().numpy())
+                    #         # Vectorized computation of new_sigmas and new_means
+                    #         alpha = torch.tensor([config['training']['alpha'][lbl] for lbl in labels['age']], device=device)
+                    #         beta = torch.tensor([config['training']['beta'][lbl] for lbl in labels['age']], device=device)
+
+                    #         new_sigmas = sigmas + alpha * (error - sigmas)
+                    #         new_means = beta * means + (1 - beta) * best_predicted_labels
+
+                    #         dataloaders[phase].dataset.update_parameters(
+                    #             ids.cpu().numpy(), new_means.cpu().numpy(), new_sigmas.cpu().numpy())
+                    #         mean_history = update_history(mean_history, ids.cpu().numpy(), new_means.cpu().numpy())
+                    #         sigma_history = update_history(sigma_history, ids.cpu().numpy(), new_sigmas.cpu().numpy())
                     
                     if phase == 'trn':
                         optimizer.zero_grad()

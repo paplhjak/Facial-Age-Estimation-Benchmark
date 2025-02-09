@@ -1,7 +1,9 @@
+import os
 import yaml
+import torch
 import subprocess
 import pandas as pd
-import os
+
 os.environ['MKL_THREADING_LAYER'] = 'GNU'
 
 
@@ -66,9 +68,73 @@ def update_csv_files():
 
     print("Files updated successfully.")
 
+def update_means_sigmas(means, sigmas, noisy_labels, ev, indices, update_function, config):
+    """Applies a given update function to means and sigmas class-wise."""
+    means = torch.tensor(means, dtype=torch.float32)
+    sigmas = torch.tensor(sigmas, dtype=torch.float32)
+    new_means = means.clone()
+    new_sigmas = sigmas.clone()
+    
+    for label in set(noisy_labels):
+        mask = noisy_labels == label  # Select only rows of the current class
+        ev_indices = indices[mask]  # Map to original indices
+        new_means[mask], new_sigmas[mask] = update_function(
+            means[mask], sigmas[mask], ev, ev_indices, config
+        )
+    
+    return new_means, new_sigmas
+
+def default_update_function(means, sigmas, ev, indices, config):
+    """Default update function for means and sigmas."""
+    alpha = config['training']['alpha']
+    beta = config['training']['beta']
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    error = torch.abs(best_predicted_labels - means)
+    new_sigmas = sigmas + alpha * (error - sigmas)
+    new_means = beta * means + (1 - beta) * best_predicted_labels
+    return new_means, new_sigmas
+
+def update_parameters(df, ev, config, update_function=default_update_function):
+    # Select only validation data where folder == 1
+    validation_mask = df[2] == 1
+    df_valid = df[validation_mask].copy()
+    valid_indices = df_valid.index.to_numpy()  # Get original indices of validation rows
+    
+    # Extract required tensors from the dataframe
+    means = df_valid[4].values  # Extract as numpy array
+    sigmas = df_valid[5].values  # Extract as numpy array
+    noisy_labels = df_valid[3].values  # Noisy labels
+    
+    # Perform updates using the selected function
+    new_means, new_sigmas = update_means_sigmas(means, sigmas, noisy_labels, ev, valid_indices, update_function, config)
+    
+    # Update dataframe only for validation entries
+    df.loc[valid_indices, 4] = new_means.numpy()
+    df.loc[valid_indices, 5] = new_sigmas.numpy()
+    
+    return df
+
+def correct_val_labels():
+    data_files = [f'facebase/data/Adience_256x256_resnet50_imagenet_noisy_dldl_v2/data_split{i}.csv' for i in range(5)]
+    eval_files = [f'facebase/results/Adience_256x256_resnet50_imagenet_noisy_dldl_v2/split{i}/evaluation.pt' for i in range(5)]
+    config_path = "facebase/configs/other/Adience_256x256_resnet50_imagenet_noisy_dldl_v2.yaml"
+    
+    with open(config_path, 'r') as file:
+        config = yaml.safe_load(file)
+    
+    for data_file, eval_file in zip(data_files, eval_files):
+        df = pd.read_csv(data_file, header=None)
+        ev = torch.load(eval_file)
+        
+        updated_df = update_parameters(df, ev, config, update_function=default_update_function)
+        
+        # Save the updated dataframe back to CSV
+        updated_df.to_csv(data_file, index=False, header=False)
+
 
 if __name__ == "__main__":
-    start_epoch = 1
+    start_epoch = 10
     end_epoch = 50
     num_splits = 5
 
@@ -91,5 +157,6 @@ if __name__ == "__main__":
                 print(f"Command failed with return code {process.returncode}: {command}")
                 break
 
+        correct_val_labels()
         # Update data means and sigmas
         update_csv_files()
