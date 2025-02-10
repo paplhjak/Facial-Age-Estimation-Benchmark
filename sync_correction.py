@@ -3,6 +3,7 @@ import yaml
 import torch
 import subprocess
 import pandas as pd
+from torch.nn.functional import softmax
 
 os.environ['MKL_THREADING_LAYER'] = 'GNU'
 
@@ -95,6 +96,46 @@ def default_update_function(means, sigmas, ev, indices, config):
     new_means = beta * means + (1 - beta) * best_predicted_labels
     return new_means, new_sigmas
 
+def confidence_adaptive_update_function(means, sigmas, ev, indices, config):
+    """
+    Update function for means and sigmas using Confidence-Adaptive Learning Rates (CALR).
+    """
+    # Extract posterior probabilities and apply softmax
+    posterior_probs = torch.tensor(ev['posterior']['age'][indices], dtype=torch.float32)
+    predicted_probs = softmax(posterior_probs, dim=1)  # Apply softmax to get probabilities
+    
+    # Compute predicted labels (class with highest probability)
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    # Compute prediction confidence (1 - entropy)
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    # entropy = -torch.sum(predicted_probs * torch.log(predicted_probs + epsilon), dim=1)
+    # confidence = 1 - entropy
+    confidence = torch.max(predicted_probs, dim=1).values
+    # Clip confidence to a minimum of 0
+    confidence = torch.clamp(confidence, min=0)
+    
+    # Extract noisy labels
+    all_noisy_labels = torch.tensor(ev['true_label']['age'], dtype=torch.long)
+    noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+    
+    # Compute class frequencies
+    class_counts = torch.bincount(all_noisy_labels)
+    class_frequencies = class_counts[noisy_labels] / len(all_noisy_labels)
+    
+    # Compute adaptive learning rates
+    alpha_base = config['training']['alpha']
+    beta_base = config['training']['beta']
+    alpha_k = alpha_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    beta_k = beta_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    
+    # Update means and sigmas
+    error = torch.abs(best_predicted_labels - means)
+    new_sigmas = sigmas + alpha_k * (error - sigmas)
+    new_means = (1 - beta_k) * means + beta_k * best_predicted_labels
+    
+    return new_means, new_sigmas
+
 def update_parameters(df, ev, config, update_function=default_update_function):
     # Select only validation data where folder == 1
     validation_mask = df[2] == 1
@@ -127,7 +168,7 @@ def correct_val_labels():
         df = pd.read_csv(data_file, header=None)
         ev = torch.load(eval_file)
         
-        updated_df = update_parameters(df, ev, config, update_function=default_update_function)
+        updated_df = update_parameters(df, ev, config, update_function=confidence_adaptive_update_function)
         
         # Save the updated dataframe back to CSV
         updated_df.to_csv(data_file, index=False, header=False)
@@ -158,5 +199,6 @@ if __name__ == "__main__":
                 break
 
         correct_val_labels()
+        # break
         # Update data means and sigmas
         update_csv_files()
