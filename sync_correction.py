@@ -1,5 +1,6 @@
 import os
 import yaml
+import json
 import torch
 import subprocess
 import pandas as pd
@@ -69,7 +70,7 @@ def update_csv_files():
 
     print("Files updated successfully.")
 
-def update_means_sigmas(means, sigmas, noisy_labels, ev, indices, update_function, config):
+def update_means_sigmas(means, sigmas, noisy_labels, ev, indices, update_function, config, epoch, pred_hist, rounded_means=None):
     """Applies a given update function to means and sigmas class-wise."""
     means = torch.tensor(means, dtype=torch.float32)
     sigmas = torch.tensor(sigmas, dtype=torch.float32)
@@ -79,9 +80,23 @@ def update_means_sigmas(means, sigmas, noisy_labels, ev, indices, update_functio
     for label in set(noisy_labels):
         mask = noisy_labels == label  # Select only rows of the current class
         ev_indices = indices[mask]  # Map to original indices
-        new_means[mask], new_sigmas[mask] = update_function(
-            means[mask], sigmas[mask], ev, ev_indices, config
-        )
+        
+        if int(label) not in pred_hist:
+            pred_hist[int(label)] = list()
+        pred_hist[int(label)].append((epoch,
+                                 ev['predicted_label']['age'][ev_indices].mean().item(),
+                                 ev['predicted_label']['age'][ev_indices].std().item()))
+        
+        if update_function == flexible_confidence_adaptive_update_function:
+            new_means[mask], new_sigmas[mask] = update_function(
+            means[mask], sigmas[mask], ev, ev_indices, config, rounded_means)
+        elif update_function == stable_mean_carl_update_function:
+            new_means[mask], new_sigmas[mask] = update_function(
+            means[mask], sigmas[mask], ev, ev_indices, config, noisy_labels, mask)
+        else:    
+            new_means[mask], new_sigmas[mask] = update_function(
+                means[mask], sigmas[mask], ev, ev_indices, config
+            )
     
     return new_means, new_sigmas
 
@@ -90,6 +105,49 @@ def default_update_function(means, sigmas, ev, indices, config):
     alpha = config['training']['alpha']
     beta = config['training']['beta']
     best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    error = torch.abs(best_predicted_labels - means)
+    new_sigmas = sigmas + alpha * (error - sigmas)
+    new_means = beta * means + (1 - beta) * best_predicted_labels
+    return new_means, new_sigmas
+
+def default_update_function_v2(means, sigmas, ev, indices, config):
+    """Default update function for means and sigmas."""
+    alpha = config['training']['alpha']
+    beta = config['training']['beta']
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    error = torch.abs(best_predicted_labels - means)
+    new_sigmas = sigmas + (1 - alpha) * (error - sigmas)
+    new_means = beta * means + (1 - beta) * best_predicted_labels
+    return new_means, new_sigmas
+
+def stable_mean_default_update_function(means, sigmas, ev, indices, config):
+    """Default update function for means and sigmas."""
+    alpha = config['training']['alpha']
+    beta = config['training']['beta']
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+
+    best_predicted_labels = best_predicted_labels - (torch.mean(best_predicted_labels) - noisy_labels[0])
+    best_predicted_labels = torch.clamp(best_predicted_labels, min=0, max=7)
+    best_predicted_labels = torch.round(best_predicted_labels)
+    
+    error = torch.abs(best_predicted_labels - means)
+    new_sigmas = sigmas + alpha * (error - sigmas)
+    new_means = beta * means + (1 - beta) * best_predicted_labels
+    return new_means, new_sigmas
+
+def stable_median_default_update_function(means, sigmas, ev, indices, config):
+    """Default update function for means and sigmas."""
+    alpha = config['training']['alpha']
+    beta = config['training']['beta']
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+
+    best_predicted_labels = best_predicted_labels - (torch.median(best_predicted_labels) - noisy_labels[0])
+    best_predicted_labels = torch.clamp(best_predicted_labels, min=0, max=7)
+    best_predicted_labels = torch.round(best_predicted_labels)
     
     error = torch.abs(best_predicted_labels - means)
     new_sigmas = sigmas + alpha * (error - sigmas)
@@ -136,7 +194,480 @@ def confidence_adaptive_update_function(means, sigmas, ev, indices, config):
     
     return new_means, new_sigmas
 
-def update_parameters(df, ev, config, update_function=default_update_function):
+def mean_confidence_adaptive_update_function(means, sigmas, ev, indices, config):
+    """
+    Update function for means and sigmas using Confidence-Adaptive Learning Rates (CALR).
+    """
+    # Extract posterior probabilities and apply softmax
+    posterior_probs = torch.tensor(ev['posterior']['age'][indices], dtype=torch.float32)
+    predicted_probs = softmax(posterior_probs, dim=1)  # Apply softmax to get probabilities
+    
+    # Compute predicted labels (class with highest probability)
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    # Compute prediction confidence (1 - entropy)
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    # entropy = -torch.sum(predicted_probs * torch.log(predicted_probs + epsilon), dim=1)
+    # confidence = 1 - entropy
+    confidence = torch.max(predicted_probs, dim=1).values
+    # Clip confidence to a minimum of 0
+    confidence = torch.clamp(confidence, min=0)
+    
+    # Extract noisy labels
+    all_noisy_labels = torch.tensor(ev['true_label']['age'], dtype=torch.long)
+    noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+    
+    # Compute class frequencies
+    class_counts = torch.bincount(all_noisy_labels)
+    class_frequencies = class_counts[noisy_labels] / len(all_noisy_labels)
+    
+    # Compute adaptive learning rates
+    # alpha_base = config['training']['alpha']
+    beta_base = config['training']['beta']
+    # alpha_k = alpha_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    beta_k = beta_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    
+    new_sigmas = sigmas.clone()
+
+    # Update means and sigmas
+    # error = torch.abs(best_predicted_labels - means)
+    # new_sigmas = sigmas + alpha_k * (error - sigmas)
+    new_means = (1 - beta_k) * means + beta_k * best_predicted_labels
+    
+    return new_means, new_sigmas
+
+def sigma_confidence_adaptive_update_function(means, sigmas, ev, indices, config):
+    """
+    Update function for means and sigmas using Confidence-Adaptive Learning Rates (CALR).
+    """
+    # Extract posterior probabilities and apply softmax
+    posterior_probs = torch.tensor(ev['posterior']['age'][indices], dtype=torch.float32)
+    predicted_probs = softmax(posterior_probs, dim=1)  # Apply softmax to get probabilities
+    
+    # Compute predicted labels (class with highest probability)
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    # Compute prediction confidence (1 - entropy)
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    # entropy = -torch.sum(predicted_probs * torch.log(predicted_probs + epsilon), dim=1)
+    # confidence = 1 - entropy
+    confidence = torch.max(predicted_probs, dim=1).values
+    # Clip confidence to a minimum of 0
+    confidence = torch.clamp(confidence, min=0)
+    
+    # Extract noisy labels
+    all_noisy_labels = torch.tensor(ev['true_label']['age'], dtype=torch.long)
+    noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+    
+    # Compute class frequencies
+    class_counts = torch.bincount(all_noisy_labels)
+    class_frequencies = class_counts[noisy_labels] / len(all_noisy_labels)
+    
+    # Compute adaptive learning rates
+    alpha_base = config['training']['alpha']
+    beta_base = config['training']['beta']
+    alpha_k = alpha_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    # beta_k = beta_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+
+    new_means = means.clone()
+    
+    # Update means and sigmas
+    error = torch.abs(best_predicted_labels - means)
+    new_sigmas = sigmas + alpha_k * (error - sigmas)
+    # new_means = (1 - beta_k) * means + beta_k * best_predicted_labels
+    
+    return new_means, new_sigmas
+
+
+def confidence_adaptive_update_function_v5(means, sigmas, ev, indices, config):
+    """
+    Update function for means and sigmas using Confidence-Adaptive Learning Rates (CALR).
+    """
+    # Extract posterior probabilities and apply softmax
+    posterior_probs = torch.tensor(ev['posterior']['age'][indices], dtype=torch.float32)
+    predicted_probs = softmax(posterior_probs, dim=1)  # Apply softmax to get probabilities
+    
+    # Compute predicted labels (class with highest probability)
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    # Compute prediction confidence (1 - entropy)
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    # entropy = -torch.sum(predicted_probs * torch.log(predicted_probs + epsilon), dim=1)
+    # confidence = 1 - entropy
+    confidence = torch.max(predicted_probs, dim=1).values
+    # Clip confidence to a minimum of 0
+    confidence = torch.clamp(confidence, min=0)
+
+    # Compute mean confidence
+    median_confidence = torch.median(confidence)
+
+    # Filter indices where confidence is higher than mean confidence
+    valid_indices = confidence > median_confidence
+    
+    # Extract noisy labels
+    all_noisy_labels = torch.tensor(ev['true_label']['age'], dtype=torch.long)
+    noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+    
+    # Compute class frequencies
+    class_counts = torch.bincount(all_noisy_labels)
+    class_frequencies = class_counts[noisy_labels] / len(all_noisy_labels)
+    
+    # Compute adaptive learning rates
+    alpha_base = config['training']['alpha']
+    beta_base = config['training']['beta']
+    alpha_k = alpha_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    beta_k = beta_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+
+    # Only update means and sigmas for valid indices
+    new_means = means.clone()
+    new_sigmas = sigmas.clone()
+    
+    if valid_indices.any():
+        # Update means and sigmas
+        error = torch.abs(best_predicted_labels - means)
+        new_sigmas[valid_indices] = sigmas[valid_indices] + alpha_k[valid_indices] * (error[valid_indices] - sigmas[valid_indices])
+        new_means[valid_indices] = (1 - beta_k[valid_indices]) * means[valid_indices] + beta_k[valid_indices] * best_predicted_labels[valid_indices]
+    
+    return new_means, new_sigmas
+
+
+def confidence_adaptive_update_function_v4(means, sigmas, ev, indices, config):
+    """
+    Update function for means and sigmas using Confidence-Adaptive Learning Rates (CALR).
+    """
+    # Extract posterior probabilities and apply softmax
+    posterior_probs = torch.tensor(ev['posterior']['age'][indices], dtype=torch.float32)
+    predicted_probs = softmax(posterior_probs, dim=1)  # Apply softmax to get probabilities
+    
+    # Compute predicted labels (class with highest probability)
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    # Compute prediction confidence (1 - entropy)
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    # entropy = -torch.sum(predicted_probs * torch.log(predicted_probs + epsilon), dim=1)
+    # confidence = 1 - entropy
+    confidence = torch.max(predicted_probs, dim=1).values
+    # Clip confidence to a minimum of 0
+    confidence = torch.clamp(confidence, min=0)
+
+    # Compute mean confidence
+    mean_confidence = torch.mean(confidence)
+
+    # Filter indices where confidence is higher than mean confidence
+    valid_indices = confidence > mean_confidence
+    
+    # Extract noisy labels
+    all_noisy_labels = torch.tensor(ev['true_label']['age'], dtype=torch.long)
+    noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+    
+    # Compute class frequencies
+    class_counts = torch.bincount(all_noisy_labels)
+    class_frequencies = class_counts[noisy_labels] / len(all_noisy_labels)
+    
+    # Compute adaptive learning rates
+    alpha_base = config['training']['alpha']
+    beta_base = config['training']['beta']
+    alpha_k = alpha_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    beta_k = beta_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+
+    # Only update means and sigmas for valid indices
+    new_means = means.clone()
+    new_sigmas = sigmas.clone()
+    
+    if valid_indices.any():
+        # Update means and sigmas
+        error = torch.abs(best_predicted_labels - means)
+        new_sigmas[valid_indices] = sigmas[valid_indices] + alpha_k[valid_indices] * (error[valid_indices] - sigmas[valid_indices])
+        new_means[valid_indices] = (1 - beta_k[valid_indices]) * means[valid_indices] + beta_k[valid_indices] * best_predicted_labels[valid_indices]
+    
+    return new_means, new_sigmas
+
+
+def confidence_adaptive_update_function_v3(means, sigmas, ev, indices, config):
+    """
+    Update function for means and sigmas using Confidence-Adaptive Learning Rates (CALR),
+    considering only elements with confidence higher than the mean confidence.
+    """
+    # Extract posterior probabilities and apply softmax
+    posterior_probs = torch.tensor(ev['posterior']['age'][indices], dtype=torch.float32)
+    predicted_probs = softmax(posterior_probs, dim=1)  # Apply softmax to get probabilities
+    
+    # Compute predicted labels (class with highest probability)
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    # Compute prediction confidence (max probability per sample)
+    confidence = torch.max(predicted_probs, dim=1).values
+    confidence = torch.clamp(confidence, min=0)  # Ensure non-negative values
+    
+    # Compute mean confidence
+    mean_confidence = torch.mean(confidence)
+    
+    # Filter indices where confidence is higher than mean confidence
+    valid_indices = confidence > mean_confidence
+    
+    # Extract noisy labels
+    all_noisy_labels = torch.tensor(ev['true_label']['age'], dtype=torch.long)
+    noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+    
+    # Compute class frequencies
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    class_counts = torch.bincount(all_noisy_labels, minlength=posterior_probs.shape[1])
+    class_frequencies = class_counts[noisy_labels] / len(all_noisy_labels)
+    
+    # Compute adaptive learning rates
+    alpha_base = config['training']['alpha']
+    beta_base = config['training']['beta']
+    alpha_k = alpha_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    beta_k = beta_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    
+    # Only update means and sigmas for valid indices
+    new_means = means.clone()
+    new_sigmas = sigmas.clone()
+    
+    if valid_indices.any():
+        error = torch.abs(best_predicted_labels - means)
+        new_sigmas[valid_indices] = sigmas[valid_indices] + (1 - alpha_k[valid_indices]) * (error[valid_indices] - sigmas[valid_indices])
+        new_means[valid_indices] = beta_k[valid_indices] * means[valid_indices] + (1 - beta_k[valid_indices]) * best_predicted_labels[valid_indices]
+    
+    return new_means, new_sigmas
+
+def confidence_adaptive_update_function_v2(means, sigmas, ev, indices, config):
+    """
+    Update function for means and sigmas using Confidence-Adaptive Learning Rates (CALR).
+    """
+    # Extract posterior probabilities and apply softmax
+    posterior_probs = torch.tensor(ev['posterior']['age'][indices], dtype=torch.float32)
+    predicted_probs = softmax(posterior_probs, dim=1)  # Apply softmax to get probabilities
+    
+    # Compute predicted labels (class with highest probability)
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    # Compute prediction confidence (1 - entropy)
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    # entropy = -torch.sum(predicted_probs * torch.log(predicted_probs + epsilon), dim=1)
+    # confidence = 1 - entropy
+    confidence = torch.max(predicted_probs, dim=1).values
+    # Clip confidence to a minimum of 0
+    confidence = torch.clamp(confidence, min=0)
+    
+    # Extract noisy labels
+    all_noisy_labels = torch.tensor(ev['true_label']['age'], dtype=torch.long)
+    noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+    
+    # Compute class frequencies
+    class_counts = torch.bincount(all_noisy_labels)
+    class_frequencies = class_counts[noisy_labels] / len(all_noisy_labels)
+    
+    # Compute adaptive learning rates
+    alpha_base = config['training']['alpha']
+    beta_base = config['training']['beta']
+    alpha_k = alpha_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    beta_k = beta_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    
+    # Update means and sigmas
+    error = torch.abs(best_predicted_labels - means)
+    new_sigmas = sigmas + (1 - alpha_k) * (error - sigmas)
+    new_means = beta_k * means + (1 - beta_k) * best_predicted_labels
+    
+    return new_means, new_sigmas
+
+def flexible_confidence_adaptive_update_function(means, sigmas, ev, indices, config, rounded_means):
+    """
+    Update function for means and sigmas using Confidence-Adaptive Learning Rates (CALR).
+    """
+    # Extract posterior probabilities and apply softmax
+    posterior_probs = torch.tensor(ev['posterior']['age'][indices], dtype=torch.float32)
+    predicted_probs = softmax(posterior_probs, dim=1)  # Apply softmax to get probabilities
+    
+    # Compute predicted labels (class with highest probability)
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    # Compute prediction confidence (1 - entropy)
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    # entropy = -torch.sum(predicted_probs * torch.log(predicted_probs + epsilon), dim=1)
+    # confidence = 1 - entropy
+    confidence = torch.max(predicted_probs, dim=1).values
+    # Clip confidence to a minimum of 0
+    confidence = torch.clamp(confidence, min=0)
+
+    # all_noisy_labels = torch.tensor(ev['true_label']['age'], dtype=torch.long)
+    # noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+    
+    # Compute class frequencies
+    class_counts = torch.bincount(rounded_means)
+    class_frequencies = class_counts[torch.round(means).to(dtype=torch.int)] / len(rounded_means)
+    
+    # Compute adaptive learning rates
+    alpha_base = config['training']['alpha']
+    beta_base = config['training']['beta']
+    alpha_k = alpha_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    beta_k = beta_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    
+    # Update means and sigmas
+    error = torch.abs(best_predicted_labels - means)
+    new_sigmas = sigmas + alpha_k * (error - sigmas)
+    new_means = (1 - beta_k) * means + beta_k * best_predicted_labels
+    
+    return new_means, new_sigmas
+
+def quartile_confidence_adaptive_update_function(means, sigmas, ev, indices, config):
+    """
+    Update function for means and sigmas using Confidence-Adaptive Learning Rates (CALR).
+    """
+    # Extract posterior probabilities and apply softmax
+    posterior_probs = torch.tensor(ev['posterior']['age'][indices], dtype=torch.float32)
+    predicted_probs = softmax(posterior_probs, dim=1)  # Apply softmax to get probabilities
+    
+    # Compute predicted labels (class with highest probability)
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    # Compute prediction confidence (1 - entropy)
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    # entropy = -torch.sum(predicted_probs * torch.log(predicted_probs + epsilon), dim=1)
+    # confidence = 1 - entropy
+    confidence = torch.max(predicted_probs, dim=1).values
+    
+    # Extract noisy labels
+    all_noisy_labels = torch.tensor(ev['true_label']['age'], dtype=torch.long)
+    noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+    
+    # Compute class frequencies
+    class_counts = torch.bincount(all_noisy_labels)
+    class_frequencies = class_counts[noisy_labels] / len(all_noisy_labels)
+    
+    # Compute adaptive learning rates
+    alpha_base = config['training']['alpha']
+    beta_base = config['training']['beta']
+    alpha_k = alpha_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    beta_k = beta_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    
+    # Initialize new means and sigmas
+    new_means = means.clone()
+    new_sigmas = sigmas.clone()
+    
+    # Mask for data points where predicted_label != true_label
+    mismatch_mask = best_predicted_labels != noisy_labels
+    
+    # Confidence values for mismatched predictions
+    mismatch_confidence = confidence[mismatch_mask]
+    
+    # Compute Q3 (third quartile) of confidence for mismatched predictions
+    if len(mismatch_confidence) > 0:  # Ensure there are mismatched predictions
+        Q3 = torch.quantile(mismatch_confidence, 0.75)
+        
+        # Mask for data points where confidence > Q3
+        high_confidence_mask = confidence > Q3
+        
+        # Update means only for high-confidence mismatched predictions
+        update_mask = mismatch_mask & high_confidence_mask
+        new_means[update_mask] = (1 - beta_k[update_mask]) * means[update_mask] + beta_k[update_mask] * best_predicted_labels[update_mask]
+
+        # Print the number of data points for which the mean is updated
+        num_updates = torch.sum(update_mask).item()
+        print(f"Number of data points updated for class {noisy_labels[0].item()}: {num_updates}")
+    else:
+        # If no mismatched predictions, print 0 updates
+        print(f"Number of data points updated for class {noisy_labels[0].item()}: 0")
+
+    
+    # Update sigmas for all data points in the class
+    error = torch.abs(best_predicted_labels - means)
+    new_sigmas = sigmas + alpha_k * (error - sigmas)    
+
+    return new_means, new_sigmas
+
+
+def stable_mean_carl_update_function(means, sigmas, ev, indices, config, noisy_labels, mask):
+    """
+    Update function for means and sigmas using Confidence-Adaptive Learning Rates (CALR).
+    """
+    # Extract posterior probabilities and apply softmax
+    posterior_probs = torch.tensor(ev['posterior']['age'][indices], dtype=torch.float32)
+    predicted_probs = softmax(posterior_probs, dim=1)  # Apply softmax to get probabilities
+    
+    # Compute predicted labels (class with highest probability)
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    # Compute prediction confidence (1 - entropy)
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    # entropy = -torch.sum(predicted_probs * torch.log(predicted_probs + epsilon), dim=1)
+    # confidence = 1 - entropy
+    confidence = torch.max(predicted_probs, dim=1).values
+    # Clip confidence to a minimum of 0
+    confidence = torch.clamp(confidence, min=0)
+
+    
+    # Extract noisy labels
+    # all_noisy_labels = torch.tensor(ev['true_label']['age'], dtype=torch.long)
+    # noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+    
+    best_predicted_labels = best_predicted_labels - (torch.mean(best_predicted_labels) - noisy_labels[mask][0])
+    best_predicted_labels = torch.clamp(best_predicted_labels, min=0, max=7)
+    best_predicted_labels = torch.round(best_predicted_labels)
+    
+    # Compute class frequencies
+    class_counts = torch.bincount(torch.tensor(noisy_labels, dtype=torch.long))
+    class_frequencies = class_counts[noisy_labels[mask]] / len(noisy_labels)
+    
+    # Compute adaptive learning rates
+    alpha_base = config['training']['alpha']
+    beta_base = config['training']['beta']
+    alpha_k = alpha_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    beta_k = beta_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    
+    # Update means and sigmas
+    error = torch.abs(best_predicted_labels - means)
+    new_sigmas = sigmas + alpha_k * (error - sigmas)
+    new_means = (1 - beta_k) * means + beta_k * best_predicted_labels
+    
+    return new_means, new_sigmas
+
+def stable_median_carl_update_function(means, sigmas, ev, indices, config):
+    """
+    Update function for means and sigmas using Confidence-Adaptive Learning Rates (CALR).
+    """
+    # Extract posterior probabilities and apply softmax
+    posterior_probs = torch.tensor(ev['posterior']['age'][indices], dtype=torch.float32)
+    predicted_probs = softmax(posterior_probs, dim=1)  # Apply softmax to get probabilities
+    
+    # Compute predicted labels (class with highest probability)
+    best_predicted_labels = torch.tensor(ev['predicted_label']['age'][indices], dtype=torch.float32)
+    
+    # Compute prediction confidence (1 - entropy)
+    epsilon = 1e-10  # Small constant to avoid log(0)
+    # entropy = -torch.sum(predicted_probs * torch.log(predicted_probs + epsilon), dim=1)
+    # confidence = 1 - entropy
+    confidence = torch.max(predicted_probs, dim=1).values
+    # Clip confidence to a minimum of 0
+    confidence = torch.clamp(confidence, min=0)
+
+    
+    # Extract noisy labels
+    all_noisy_labels = torch.tensor(ev['true_label']['age'], dtype=torch.long)
+    noisy_labels = torch.tensor(ev['true_label']['age'][indices], dtype=torch.long)
+    
+    best_predicted_labels = best_predicted_labels - (torch.median(best_predicted_labels) - noisy_labels[0])
+    best_predicted_labels = torch.clamp(best_predicted_labels, min=0, max=7)
+    best_predicted_labels = torch.round(best_predicted_labels)
+    
+    # Compute class frequencies
+    class_counts = torch.bincount(all_noisy_labels)
+    class_frequencies = class_counts[noisy_labels] / len(all_noisy_labels)
+    
+    # Compute adaptive learning rates
+    alpha_base = config['training']['alpha']
+    beta_base = config['training']['beta']
+    alpha_k = alpha_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    beta_k = beta_base * (confidence / (1 - torch.log(class_frequencies + epsilon)))
+    
+    # Update means and sigmas
+    error = torch.abs(best_predicted_labels - means)
+    new_sigmas = sigmas + alpha_k * (error - sigmas)
+    new_means = (1 - beta_k) * means + beta_k * best_predicted_labels
+    
+    return new_means, new_sigmas
+
+def update_parameters(df, ev, config, epoch, pred_hist, update_function=default_update_function):
     # Select only validation data where folder == 1
     validation_mask = df[2] == 1
     df_valid = df[validation_mask].copy()
@@ -148,7 +679,11 @@ def update_parameters(df, ev, config, update_function=default_update_function):
     noisy_labels = df_valid[3].values  # Noisy labels
     
     # Perform updates using the selected function
-    new_means, new_sigmas = update_means_sigmas(means, sigmas, noisy_labels, ev, valid_indices, update_function, config)
+    if update_function == flexible_confidence_adaptive_update_function:
+        rounded_means = torch.round(torch.tensor(df[4].values, dtype=torch.float32).clone()).to(dtype=torch.int)
+        new_means, new_sigmas = update_means_sigmas(means, sigmas, noisy_labels, ev, valid_indices, update_function, config, epoch, pred_hist, rounded_means)
+    else:
+        new_means, new_sigmas = update_means_sigmas(means, sigmas, noisy_labels, ev, valid_indices, update_function, config, epoch, pred_hist)
     
     # Update dataframe only for validation entries
     df.loc[valid_indices, 4] = new_means.numpy()
@@ -156,7 +691,7 @@ def update_parameters(df, ev, config, update_function=default_update_function):
     
     return df
 
-def correct_val_labels():
+def correct_val_labels(epoch, predicted_label_history):
     data_files = [f'facebase/data/Adience_256x256_resnet50_imagenet_noisy_dldl_v2/data_split{i}.csv' for i in range(5)]
     eval_files = [f'facebase/results/Adience_256x256_resnet50_imagenet_noisy_dldl_v2/split{i}/evaluation.pt' for i in range(5)]
     config_path = "facebase/configs/other/Adience_256x256_resnet50_imagenet_noisy_dldl_v2.yaml"
@@ -164,11 +699,11 @@ def correct_val_labels():
     with open(config_path, 'r') as file:
         config = yaml.safe_load(file)
     
-    for data_file, eval_file in zip(data_files, eval_files):
+    for data_file, eval_file, pred_hist in zip(data_files, eval_files, predicted_label_history):
         df = pd.read_csv(data_file, header=None)
         ev = torch.load(eval_file)
         
-        updated_df = update_parameters(df, ev, config, update_function=confidence_adaptive_update_function)
+        updated_df = update_parameters(df, ev, config, epoch, pred_hist, update_function=stable_mean_carl_update_function)
         
         # Save the updated dataframe back to CSV
         updated_df.to_csv(data_file, index=False, header=False)
@@ -179,6 +714,8 @@ if __name__ == "__main__":
     end_epoch = 50
     num_splits = 5
 
+    predicted_label_history_path = [f"facebase/results/Adience_256x256_resnet50_imagenet_noisy_dldl_v2/split{split}/predicted_label_history.json" for split in range(5)]
+    predicted_label_history = [dict() for split in range(5)]
     config_path = "facebase/configs/other/Adience_256x256_resnet50_imagenet_noisy_dldl_v2.yaml"
     base_command = "python train.py {config_path} {split} --wandb-disabled"
 
@@ -198,7 +735,12 @@ if __name__ == "__main__":
                 print(f"Command failed with return code {process.returncode}: {command}")
                 break
 
-        correct_val_labels()
+        correct_val_labels(epoch, predicted_label_history)
         # break
         # Update data means and sigmas
+        
         update_csv_files()
+    
+        for split in range(5):
+            with open(predicted_label_history_path[split], 'w') as f:
+                json.dump(predicted_label_history[split], f, indent=4)
