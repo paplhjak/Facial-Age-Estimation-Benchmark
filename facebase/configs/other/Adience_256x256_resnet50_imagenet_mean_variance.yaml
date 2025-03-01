@@ -28,7 +28,7 @@ model:
 optimizer:
   num_workers: 8
   num_epochs: 50
-  batch_size: 2
+  batch_size: 100
   improve_patience: 50
   lr: 0.0001
   betas: [0.9, 0.999]

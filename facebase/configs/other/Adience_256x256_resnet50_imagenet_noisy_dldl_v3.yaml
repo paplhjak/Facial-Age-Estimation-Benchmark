@@ -1,0 +1,52 @@
+data:
+  benchmark: "facebase/benchmarks/Adience.yaml"
+  img_dir: "../datasets/"
+  output_dir: "facebase/results/"
+  data_dir: "facebase/data/"
+
+heads:
+  - tag: "age"
+    type: "noisy_dldl_v2"
+    attribute: "age"
+    labels: [[0],[1],[2],[3],[4],[5],[6],[7]]
+    weight: 1
+    metric: ["mae", "cs5"]
+    visual_metric:
+      - tag: "mae"
+      - tag: "bias"
+      - tag: "prc"
+        target_class:
+          [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+        target_class_name: "child 0-17"
+        target_class_prior: [0.1, 0.2, 0.3]
+
+model:
+  architecture: "resnet50"
+  use_pretrained: True
+  input_size: [256, 256]
+
+optimizer:
+  num_workers: 8
+  num_epochs: 50
+  batch_size: 100
+  improve_patience: 50
+  lr: 0.0001
+  betas: [0.9, 0.999]
+  eps: 0.00000001
+  algo: "adam"
+  use_amp: True
+
+preprocess:
+  bbox_extension: [0, 0]
+  input_extension: [0.05, 0.05]
+  trn: { path: "lib/augmentation_configs/256x256/jitter+hflip.json" }
+  val: { path: "lib/augmentation_configs/256x256/resize_normalize.json" }
+
+training:
+  mode: "noisy"
+  base_sigma: 0.75
+  lambda_: 1.0
+  # alpha: [0.07, 0.06, 0.06, 0.05, 0.1, 0.05, 0.03, 0.03]
+  alpha: 0.9
+  # beta: [0.57, 0.49, 0.51, 0.42, 0.8, 0.45, 0.26, 0.26]
+  beta: 0.8

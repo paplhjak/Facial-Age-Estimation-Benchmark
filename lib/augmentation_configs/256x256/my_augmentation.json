@@ -1,0 +1,69 @@
+{
+    "__version__": "v1,0",
+    "transform": {
+        "__class_fullname__": "albumentations.core.composition.Compose",
+        "p": 1.0,
+        "transforms": [
+            {
+                "__class_fullname__": "albumentations.augmentations.crops.transforms.RandomResizedCrop",
+                "always_apply": true,
+                "p": 1.0,
+                "height": 256,
+                "width": 256,
+                "scale": [
+                    0.8,
+                    1.0
+                ],
+                "ratio": [
+                    1.0,
+                    1.0
+                ]
+            },
+            {
+                "__class_fullname__": "albumentations.augmentations.transforms.HorizontalFlip",
+                "always_apply": false,
+                "p": 0.5
+            },
+            {
+                "__class_fullname__": "albumentations.augmentations.transforms.Rotate",
+                "always_apply": false,
+                "p": 0.5,
+                "limit": 20
+            },
+            {
+                "__class_fullname__": "albumentations.augmentations.transforms.ColorJitter",
+                "always_apply": false,
+                "p": 0.5,
+                "brightness": 0.5,
+                "contrast": 0.5,
+                "saturation": 0.5,
+                "hue": 0.1
+            },
+            {
+                "__class_fullname__": "albumentations.augmentations.transforms.Normalize",
+                "always_apply": true,
+                "p": 1.0,
+                "mean": [
+                    0.485, 
+                    0.456, 
+                    0.406
+                ],
+                "std": [
+                    0.229, 
+                    0.224, 
+                    0.225
+                ],
+                "max_pixel_value": 255
+            },
+            {
+                "__class_fullname__": "albumentations.pytorch.transforms.ToTensorV2",
+                "always_apply": true,
+                "p": 1.0,
+                "transpose_mask": true
+            }
+        ],
+        "bbox_params": null,
+        "keypoint_params": null,
+        "additional_targets": {}
+    }
+}

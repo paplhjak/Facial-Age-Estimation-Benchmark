@@ -1,0 +1,8 @@
+training:
+  start_epoch: 10
+  end_epoch: 50
+  num_splits: 5
+  config: "Adience_256x256_resnet50_imagenet_noisy_dldl_v2"
+
+correction:
+  method: "stable_mean_carl_update_function"

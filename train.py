@@ -1,19 +1,20 @@
 import os
-import git
-import yaml
 import sys
+import yaml
 import torch
 import random
 import logging
+import argparse
 import numpy as np
 import torch.optim as optim
-from lib.training import *
+
 from lib.utils import *
+from lib.training import *
 from lib.model import initialize_model
 from lib.data_loaders import MyYamlLoader, NormalizedImages, get_data_transform
-import argparse
-# import wandb
 from datetime import datetime
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')  
 
 # fix random seeds for reproducibility
 SEED = 123
@@ -25,15 +26,12 @@ random.seed(SEED)
 
 # added to solve the problem with too many open files when using >0 workers
 # https://github.com/pytorch/pytorch/issues/11201
-import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')  
 
 print("PyTorch Version: ", torch.__version__)
 print("Torchvision Version: ", torchvision.__version__)
 
 def setup_logging(output_dir):
     log_file = os.path.join(output_dir, "training.log")
-    
     # Configure logging to write only to the log file
     logging.basicConfig(
         level=logging.INFO,
@@ -42,7 +40,6 @@ def setup_logging(output_dir):
             logging.FileHandler(log_file, mode="a")  # Log only to the file
         ]
     )
-    
     # Ensure logs are not propagated to the root logger
     logging.getLogger().propagate = False
     
@@ -163,23 +160,25 @@ if __name__ == '__main__':
     batch_size = config["optimizer"]["batch_size"]
     num_workers = config["optimizer"]["num_workers"]
     dataloaders = {
-        x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-        for x in ['trn', 'val'] } 
+        'trn': torch.utils.data.DataLoader(image_datasets['trn'], batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True),
+        'val': torch.utils.data.DataLoader(image_datasets['val'], batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
+        } 
 
     # Gather and print the parameters to be optimized
     # if config['training']['mode'] == 'normal':
     params_to_update = model.parameters()
-    print("Params to learn:")
-    logging.info("Params to learn:")
-    learnable_params_num = 0
-    for name, param in model.named_parameters():
-        if param.requires_grad == True:
-            learnable_params_num += param.numel()
-            print("\t", name, param.numel())
-            logging.info(f"\t {name}, {param.numel()}")
-    else:
-        print(f"Number of Learnable Parameters: {learnable_params_num}", end='\n')
-        logging.info(f"Number of Learnable Parameters: {learnable_params_num}\n")
+    if config['optimizer']['num_epochs'] <= 10:
+        print("Params to learn:")
+        logging.info("Params to learn:")
+        learnable_params_num = 0
+        for name, param in model.named_parameters():
+            if param.requires_grad == True:
+                learnable_params_num += param.numel()
+                print("\t", name, param.numel())
+                logging.info(f"\t {name}, {param.numel()}")
+        else:
+            print(f"Number of Learnable Parameters: {learnable_params_num}", end='\n')
+            logging.info(f"Number of Learnable Parameters: {learnable_params_num}\n")
 
     # Setup optimizer
     if config["optimizer"]["algo"] == "sgd":

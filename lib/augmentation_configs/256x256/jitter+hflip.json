@@ -3,6 +3,7 @@
     "transform": {
         "__class_fullname__": "albumentations.core.composition.Compose",
         "p": 1.0,
+        "seed": 123,
         "transforms": [
             {
                 "__class_fullname__": "albumentations.augmentations.crops.transforms.RandomResizedCrop",

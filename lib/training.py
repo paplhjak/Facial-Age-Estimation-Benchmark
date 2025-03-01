@@ -8,21 +8,20 @@ Functions:
 
 """
 
-import torch
-import torch.nn as nn
-import torchvision
-import matplotlib.pyplot as plt
-import logging
-import time
 import os
 import copy
+import time
 import json
-import sys
+import random
+import torch
+import logging
 import numpy as np
-# import wandb
+import torchvision
+import torch.nn as nn
+import matplotlib.pyplot as plt
+
 from typing import Dict
 from tqdm import tqdm
-
 
 def eval_model(model: nn.Module,
                config: dict,
@@ -171,7 +170,7 @@ def train_model(model: nn.Module,
         config['optimizer']['use_amp'])
 
     # visualize validation and training images
-    dry_training(config, dataloaders, output_dir)
+    # dry_training(config, dataloaders, output_dir)
 
     num_epochs = config['optimizer']['num_epochs']
     improve_patience = config['optimizer']['improve_patience']
@@ -281,6 +280,7 @@ def train_model(model: nn.Module,
                         for head, head_logits in heads.items():
 
                             head_labels = labels[head].to(device)
+                            # corrected_labels = torch.round(means).to(device=device, dtype=torch.int)
 
                             # evaluate loss function
                             head_loss = model.get_head_loss(
@@ -332,8 +332,8 @@ def train_model(model: nn.Module,
 
                     #         dataloaders[phase].dataset.update_parameters(
                     #             ids.cpu().numpy(), new_means.cpu().numpy(), new_sigmas.cpu().numpy())
-                    #         mean_history = update_history(mean_history, ids.cpu().numpy(), new_means.cpu().numpy())
-                    #         sigma_history = update_history(sigma_history, ids.cpu().numpy(), new_sigmas.cpu().numpy())
+                    mean_history = update_history(mean_history, ids.cpu().numpy(), means.cpu().numpy())
+                    sigma_history = update_history(sigma_history, ids.cpu().numpy(), sigmas.cpu().numpy())
                     
                     if phase == 'trn':
                         optimizer.zero_grad()
