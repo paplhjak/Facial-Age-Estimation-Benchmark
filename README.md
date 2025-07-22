@@ -96,11 +96,16 @@ Alternatively, contact us over email :cowboy_hat_face:
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+## License
+The code of Facial-Age-Estimation-Benchmark is released under the MIT License. There is no limitation for both academic and commercial usage.
+
 <!-- CONTACT -->
 
 ## Contact
 
 For questions/comments please email Jakub Paplham at paplhjak@fel.cvut.cz :slightly_smiling_face:
+
+
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
